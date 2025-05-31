@@ -1,10 +1,19 @@
 import express from 'express';
-import { addEmployee, getEmployees } from '../controllers/employeeController.js';
-import upload, { convertImage } from '../middlewares/imageupload.js';
+import { changeEmployeePassword, createEmployee, deleteEmployee, editEmployee, forgotEmployeePassword, getEmployeeById, loginEmployee, resetPassword, VerifyEmail } from '../controllers/employeeController.js';
+import upload, { convertJfifToJpeg } from '../middlewares/imageupload.js';
 
 const employeeRoutes = express.Router();
 
-employeeRoutes.post("/addEmployee", upload.single("employeeimage"),convertImage , addEmployee)
-employeeRoutes.get("/getEmployees/:id", getEmployees)
+employeeRoutes.post("/createEmployee", upload.single("emp_image"), convertJfifToJpeg, createEmployee)
+employeeRoutes.get("/getEmployeeById/:id", getEmployeeById)
+employeeRoutes.put("/editEmployee/:id", upload.single("emp_image"), convertJfifToJpeg, editEmployee)
+employeeRoutes.delete("/deleteEmployee/:id", deleteEmployee)
+
+
+employeeRoutes.post("/loginEmployee", loginEmployee)
+employeeRoutes.post("/forgotEmployeePassword", forgotEmployeePassword)
+employeeRoutes.post("/VerifyEmail", VerifyEmail)
+employeeRoutes.post("/resetPassword", resetPassword)
+employeeRoutes.post("/changeEmployeePassword/:id", changeEmployeePassword)
 
 export default employeeRoutes

@@ -1,12 +1,12 @@
 import express from 'express';
 import { addAdmin, changePassword, deleteAdmin, forgotPassword, getAdminById, loginAdmin, resetPassword, updateAdmin, VerifyEmail } from '../controllers/adminController.js';
-import upload, { convertImage } from '../middlewares/imageupload.js';
+import upload, { convertJfifToJpeg } from '../middlewares/imageupload.js';
 
 const userRoutes = express.Router();
 
 userRoutes.post('/addAdmin', addAdmin);
 userRoutes.get('/getAdminById/:id', getAdminById);
-userRoutes.put('/updateAdmin/:id', upload.single("image"), convertImage, updateAdmin);
+userRoutes.put('/updateAdmin/:id', upload.single("image"), convertJfifToJpeg, updateAdmin);
 userRoutes.delete('/deleteAdmin/:id', deleteAdmin);
 userRoutes.post('/loginAdmin', loginAdmin);
 

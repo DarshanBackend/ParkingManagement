@@ -1,14 +1,25 @@
-// middlewares/upload.js
-
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 
-// Use memory storage to support conversion via sharp
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const folderName = file.fieldname;
+    const uploadPath = path.join('public', folderName);
 
-// File type validation
+    fs.mkdir(uploadPath, { recursive: true }, (error) => {
+      if (error) return cb(error);
+      cb(null, uploadPath);
+    });
+  },
+  filename: function (req, file, cb) {
+    const sanitizedName = file.originalname.replace(/\s+/g, '');
+    const finalName = `${Date.now()}-${sanitizedName}`;
+    cb(null, finalName);
+  }
+});
+
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const allowedExts = ['.jpeg', '.jpg', '.png', '.webp', '.jfif'];
@@ -17,7 +28,7 @@ const fileFilter = (req, file, cb) => {
     'image/png',
     'image/webp',
     'image/jfif',
-    'application/octet-stream' // fallback mimetype for .jfif
+    'application/octet-stream' // fallback for .jfif when mimetype is incorrect
   ];
 
   if (!allowedExts.includes(ext) || !allowedMimeTypes.includes(file.mimetype)) {
@@ -27,43 +38,42 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-// Configure multer with memory storage
+
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 2 * 1024 * 1024 } // 2MB limit
+  limits: { fileSize: 2 * 1024 * 1024 } // 2MB
 });
 
-// Middleware to convert .jfif (or any) image to .jpeg and save to disk
-export const convertImage = async (req, res, next) => {
+export const convertJfifToJpeg = async (req, res, next) => {
   try {
-    const file = req.file;
+    const file = req.file || (req.files && req.files['emp_image'] && req.files['emp_image'][0]);
     if (!file) return next();
 
-    const originalExt = path.extname(file.originalname).toLowerCase();
-    const baseName = path.basename(file.originalname, originalExt).replace(/\s+/g, '');
-    const newFilename = `${Date.now()}-${baseName}.jpeg`;
+    const ext = path.extname(file.originalname).toLowerCase();
 
-    const uploadDir = path.join('public', 'employeeimage');
-    fs.mkdirSync(uploadDir, { recursive: true });
+    if (ext === '.jfif' || file.mimetype === 'image/jfif' || file.mimetype === 'application/octet-stream') {
+      const parsedPath = path.parse(file.path);
+      const jpegPath = path.join(parsedPath.dir, `${parsedPath.name}.jpeg`);
 
-    const fullPath = path.join(uploadDir, newFilename);
+      await sharp(file.path)
+        .jpeg()
+        .toFile(jpegPath);
 
-    await sharp(file.buffer)
-      .resize(300) // optional resizing
-      .jpeg({ quality: 90 })
-      .toFile(fullPath);
+      fs.unlinkSync(file.path); // remove old .jfif
+      file.path = jpegPath;
+      file.filename = path.basename(jpegPath);
+      file.mimetype = 'image/jpeg';
 
-    // Update the file object for downstream usage
-    req.file.filename = newFilename;
-    req.file.path = fullPath;
-    req.file.mimetype = 'image/jpeg';
+    }
 
     next();
   } catch (err) {
-    console.error('Image conversion error:', err);
-    return res.status(500).json({ message: 'Image conversion failed', error: err.message });
+    console.error('Error in convertJfifToJpeg:', err);
+    next(err);
   }
 };
+
+
 
 export default upload;

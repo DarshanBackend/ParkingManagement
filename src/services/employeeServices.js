@@ -48,9 +48,9 @@ class EmployeeServices {
     }
 
     // Get employee By Email
-    async getEmployeeByEmail(email) {
+    async getEmployeeByEmail(Email) {
         try {
-            return await employee.findOne({ email }).exec();
+            return await employee.findOne({ Email }).exec();
         } catch (error) {
             return error.message;
         }

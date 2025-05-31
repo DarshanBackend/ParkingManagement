@@ -7,6 +7,9 @@ const empSchema = mongoose.Schema({
     Email: {
         type: String
     },
+    password: {
+        type: String
+    },
     aadharcardNo: {
         type: Number
     },
@@ -33,9 +36,26 @@ const empSchema = mongoose.Schema({
         type: Number
     },
     shift: {
-        type: String,
-        default: "Shift 01"
-    }
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Shift"
+    },
+    shift_Time: {
+        type: String
+    },
+    resetOTP: {
+        type: String
+    },
+    otpExpires: {
+        type: Date
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now,
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now,
+    },
 })
 
 export default mongoose.model("employee", empSchema);
