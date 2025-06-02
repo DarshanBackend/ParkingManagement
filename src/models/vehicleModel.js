@@ -19,6 +19,10 @@ const vehicleSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    slotNo: {
+        type: String,
+        required: true
+    },
     parkingLocation: {
         type: String,
         required: true

@@ -8,6 +8,7 @@ import employeeRoutes from "./src/routes/employeeRoutes.js";
 import shiftRoutes from "./src/routes/shiftRoutes.js";
 import vehicleRoutes from "./src/routes/vehicleRoutes.js";
 import parkingRoutes from "./src/routes/parkingDetailsRoutes.js";
+import dashBoardRoutes from "./src/routes/dashBoardRoutes.js";
 dotenv.config();
 
 const port = process.env.PORT;
@@ -30,6 +31,9 @@ app.use("/api/vehicle", vehicleRoutes)
 
 //parking Routes
 app.use("/api/parkingDetails", parkingRoutes)
+
+//dashBoard Routes
+app.use("/api/dashBoard", dashBoardRoutes)
 
 // Connect to Database
 connectDB();

@@ -255,7 +255,7 @@ export const getParkingReport = async (req, res) => {
                 date: moment(item.entryTime).format("DD MMMM YYYY"),
                 vehicleNumber: vehicle.vehicleNumber,
                 vehicleType: vehicle.category,
-                slotNo: "Level 1 - A6", 
+                slotNo: vehicle.slotNo,
                 inTime: entry.format("hh:mm A"),
                 outTime: exit.format("hh:mm A"),
                 totalTime: totalTime

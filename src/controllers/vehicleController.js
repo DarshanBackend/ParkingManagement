@@ -4,10 +4,10 @@ import { ThrowError } from "../utils/Errorutils.js";
 // Add Vehicle Details
 export const addVehicleDetails = async (req, res) => {
     try {
-        const { mobile, vehicleNumber } = req.body;
+        const { mobile, vehicleNumber, slotNo } = req.body;
 
         if (!mobile || !vehicleNumber) {
-            return res.status(400).json({ message: "Mobile and vehicle number are required." });
+            return res.status(400).json({ message: "Mobile , vehicle and slotNo number are required." });
         }
 
         // Check for existing vehicle with same mobile number
@@ -22,6 +22,11 @@ export const addVehicleDetails = async (req, res) => {
             return res.status(409).json({ message: "Vehicle number already exists." });
         }
 
+        const existingVehicleslotNo = await vehicalModel.findOne({ slotNo })
+        if (existingVehicleslotNo) {
+            return res.status(409).json({ message: "Vehicle slotNo already Booked." });
+        }
+
         const vehicle = new vehicalModel(req.body);
         await vehicle.save();
 
@@ -34,7 +39,12 @@ export const addVehicleDetails = async (req, res) => {
 // Get All Vehicle Details
 export const getVehicleDetails = async (req, res) => {
     try {
-        const vehicles = await vehicalModel.find().sort({ createdAt: -1 });
+        const { id } = req.params
+        const vehicles = await vehicalModel.findById(id).sort({ createdAt: -1 });
+
+        if (!vehicles) {
+            return res.status(409).json({ message: "Id not found!!" });
+        }
 
         if (vehicles.length === 0) {
             return res.status(200).json({ message: "No vehicle details found.", data: [] });
@@ -46,6 +56,22 @@ export const getVehicleDetails = async (req, res) => {
     }
 };
 
+//getAll Vegicle Details
+export const getAllVehicleDetails = async (req, res) => {
+    try {
+        const vehicles = await vehicalModel.find()
+
+        if (vehicles.length === 0) {
+            return res.status(200).json({ message: "No vehicle details found.", data: [] });
+        }
+
+        res.status(200).json(vehicles);
+    } catch (error) {
+        return ThrowError(res, 500, error.message);
+    }
+}
+
+
 // Update Vehicle Details
 export const updateVehicleDetails = async (req, res) => {
     try {
@@ -53,6 +79,7 @@ export const updateVehicleDetails = async (req, res) => {
             new: true
         });
         if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
+
         res.status(200).json({ message: "Vehicle details updated", vehicle });
     } catch (error) {
         return ThrowError(res, 500, error.message);
