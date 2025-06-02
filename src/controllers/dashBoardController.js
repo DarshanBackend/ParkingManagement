@@ -6,7 +6,7 @@ import moment from "moment";
 //getCheckingSummary
 export const getCheckinSummary = async (req, res) => {
     try {
-        const summary = await parkingDetailsModel.aggregate([
+        const summary = await parkingDetailModel.aggregate([
             {
                 $lookup: {
                     from: "vehicles",
@@ -40,17 +40,19 @@ export const getCheckinSummary = async (req, res) => {
 export const getParkingOverview = async (req, res) => {
     try {
         const totalSlotsPerLevel = {
-            "Level 1": 20,
-            "Level 2": 20,
-            "Level 3": 20,
-            "Level 4": 20,
-            "Level 5": 20
+            "Level 1": 600,
+            "Level 2": 600,
+            "Level 3": 600,
+            "Level 4": 600,
+            "Level 5": 600
         };
 
-        const usedSlots = await vehicleModel.aggregate([
+        // Aggregate vehicle count grouped by level and type
+        const bookedVehicles = await vehicleModel.aggregate([
             {
                 $match: {
-                    slotNo: { $regex: /^Level \d+/i } // Match any Level with number
+                    slotNo: { $regex: /^Level \d+/i },
+                    category: { $in: ["Car", "Truck", "Bike"] }
                 }
             },
             {
@@ -58,61 +60,85 @@ export const getParkingOverview = async (req, res) => {
                     level: {
                         $regexFind: {
                             input: "$slotNo",
-                            regex: /Level \d+/i
+                            regex: /(Level \d+)/i
                         }
                     }
                 }
             },
             {
-                $addFields: {
-                    level: "$level.match"
+                $match: {
+                    "level.match": { $ne: null }
                 }
             },
             {
                 $group: {
-                    _id: "$level",
-                    usedCount: { $sum: 1 }
+                    _id: {
+                        level: "$level.match",
+                        category: "$category"
+                    },
+                    count: { $sum: 1 }
                 }
             }
         ]);
 
+        // Map results into a structured format
+        const parkingMap = {};
+
+        bookedVehicles.forEach(({ _id, count }) => {
+            const { level, category } = _id;
+
+            if (!parkingMap[level]) {
+                parkingMap[level] = { Car: 0, Truck: 0, Bike: 0 };
+            }
+
+            parkingMap[level][category] = count;
+        });
+
+        // Format response
         const result = Object.entries(totalSlotsPerLevel).map(([level, total]) => {
-            const match = usedSlots.find(l => l._id?.toLowerCase() === level.toLowerCase());
-            const used = match ? match.usedCount : 0;
-            const percent = Math.round((used / total) * 100);
+            const counts = parkingMap[level] || { Car: 0, Truck: 0, Bike: 0 };
+            const used = counts.Car + counts.Truck + counts.Bike;
 
             return {
                 level,
-                usedSlots: used,
                 totalSlots: total,
-                percentUsed: percent
+                availableSlots: total - used,
+                vehicleCount: counts
             };
         });
 
         res.status(200).json(result);
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        console.error("Error in getParkingOverview:", error);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 };
 
 //getVehicleVolume
 export const getParkingVolumeOverview = async (req, res) => {
     try {
-        const maxCapacity = 10000; // Total possible slots in all levels
+        const totalSlotsPerLevel = {
+            "Level 1": 600,
+            "Level 2": 600,
+            "Level 3": 600,
+            "Level 4": 600,
+            "Level 5": 600
+        };
 
-        const currentVolume = await vehicleModel.countDocuments(); // Total used slots
+        const maxCapacity = Object.values(totalSlotsPerLevel).reduce((acc, val) => acc + val, 0);
+        const currentVolume = await vehicleModel.countDocuments();
 
         res.status(200).json({
             currentVolume,
-            maxCapacity,
+            maxCapacity
         });
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
-// Get Revenue Analytics 
 
+// Get Revenue Analytics 
 export const getRevenueAnalytics = async (req, res) => {
     try {
         const today = moment().startOf('day');
@@ -156,7 +182,7 @@ export const getRevenueAnalytics = async (req, res) => {
             series
         });
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
@@ -166,8 +192,8 @@ export const getBookingSummary = async (req, res) => {
         const today = moment().startOf('day').toDate();
         const tomorrow = moment().endOf('day').toDate();
 
-        const todayCount = await parkingDetailsModel.countDocuments({ entryTime: { $gte: today, $lte: tomorrow } });
-        const yesterdayCount = await parkingDetailsModel.countDocuments({ entryTime: { $gte: moment(today).subtract(1, 'day').toDate(), $lt: today } });
+        const todayCount = await parkingDetailModel.countDocuments({ entryTime: { $gte: today, $lte: tomorrow } });
+        const yesterdayCount = await parkingDetailModel.countDocuments({ entryTime: { $gte: moment(today).subtract(1, 'day').toDate(), $lt: today } });
 
         const percentChange = yesterdayCount > 0 ? (((todayCount - yesterdayCount) / yesterdayCount) * 100).toFixed(2) : 100;
 
@@ -177,14 +203,14 @@ export const getBookingSummary = async (req, res) => {
             direction: todayCount >= yesterdayCount ? "increase" : "decrease"
         });
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
 // Get Parking Type Summary
 export const getParkingTypeSummary = async (req, res) => {
     try {
-        const shortTime = await parkingDetailsModel.countDocuments({
+        const shortTime = await parkingDetailModel.countDocuments({
             $expr: {
                 $lte: [
                     { $subtract: ["$exitTime", "$entryTime"] },
@@ -193,7 +219,7 @@ export const getParkingTypeSummary = async (req, res) => {
             }
         });
 
-        const longTime = await parkingDetailsModel.countDocuments({
+        const longTime = await parkingDetailModel.countDocuments({
             $expr: {
                 $gt: [
                     { $subtract: ["$exitTime", "$entryTime"] },
@@ -204,14 +230,14 @@ export const getParkingTypeSummary = async (req, res) => {
 
         res.status(200).json({ shortTime, longTime });
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
 // Get Current Revenue
 export const getCurrentRevenue = async (req, res) => {
     try {
-        const total = await parkingDetailsModel.aggregate([
+        const total = await parkingDetailModel.aggregate([
             {
                 $lookup: {
                     from: "vehicles",
@@ -231,34 +257,47 @@ export const getCurrentRevenue = async (req, res) => {
 
         res.status(200).json({ revenue: total[0]?.total || 0 });
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
 // getTotalRevenue
 export const getTotalRevenue = async (req, res) => {
     try {
-        const [totalResult, onlineResult, offlineResult] = await Promise.all([
-            vehicleModel.aggregate([
-                { $group: { _id: null, total: { $sum: "$parkingCharges" } } }
-            ]),
-            vehicleModel.aggregate([
-                { $match: { paymentMethod: "Online" } },
-                { $group: { _id: null, total: { $sum: "$parkingCharges" } } }
-            ]),
-            vehicleModel.aggregate([
-                { $match: { paymentMethod: "Offline" } },
-                { $group: { _id: null, total: { $sum: "$parkingCharges" } } }
-            ])
+        const result = await vehicleModel.aggregate([
+            {
+                $project: {
+                    parkingCharges: 1,
+                    paymentMethod: { $toLower: "$paymentMethod" }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: "$parkingCharges" },
+                    online: {
+                        $sum: {
+                            $cond: [{ $eq: ["$paymentMethod", "online"] }, "$parkingCharges", 0]
+                        }
+                    },
+                    offline: {
+                        $sum: {
+                            $cond: [{ $eq: ["$paymentMethod", "offline"] }, "$parkingCharges", 0]
+                        }
+                    }
+                }
+            }
         ]);
 
+        const data = result[0] || { totalRevenue: 0, online: 0, offline: 0 };
+
         res.status(200).json({
-            totalRevenue: totalResult[0]?.total || 0,
-            online: onlineResult[0]?.total || 0,
-            offline: offlineResult[0]?.total || 0,
+            totalRevenue: data.totalRevenue,
+            online: data.online,
+            offline: data.offline
         });
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
@@ -305,7 +344,7 @@ export const getHourlyRevenueToday = async (req, res) => {
 
         res.status(200).json(series);
     } catch (error) {
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
@@ -361,6 +400,6 @@ export const getRecentTransactions = async (req, res) => {
         res.status(200).json(formatted);
     } catch (error) {
         console.error("getRecentTransactions error:", error);
-       return ThrowError(res, 500, error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
