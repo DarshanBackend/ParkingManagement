@@ -1,11 +1,12 @@
 import express from 'express';
-import { changeEmployeePassword, createEmployee, deleteEmployee, editEmployee, forgotEmployeePassword, getEmployeeById, loginEmployee, resetPassword, VerifyEmail } from '../controllers/employeeController.js';
+import { changeEmployeePassword, createEmployee, deleteEmployee, editEmployee, forgotEmployeePassword, getAllEmployee, getEmployeeById, loginEmployee, resetPassword, VerifyEmail } from '../controllers/employeeController.js';
 import upload, { convertJfifToJpeg } from '../middlewares/imageupload.js';
 
 const employeeRoutes = express.Router();
 
 employeeRoutes.post("/createEmployee", upload.single("emp_image"), convertJfifToJpeg, createEmployee)
 employeeRoutes.get("/getEmployeeById/:id", getEmployeeById)
+employeeRoutes.get("/getAllEmployee", getAllEmployee)
 employeeRoutes.put("/editEmployee/:id", upload.single("emp_image"), convertJfifToJpeg, editEmployee)
 employeeRoutes.delete("/deleteEmployee/:id", deleteEmployee)
 

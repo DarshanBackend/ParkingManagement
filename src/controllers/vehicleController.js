@@ -1,3 +1,4 @@
+import { compare } from "bcrypt";
 import vehicalModel from "../models/vehicleModel.js";
 import { ThrowError } from "../utils/Errorutils.js";
 
@@ -70,7 +71,6 @@ export const getAllVehicleDetails = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 }
-
 
 // Update Vehicle Details
 export const updateVehicleDetails = async (req, res) => {

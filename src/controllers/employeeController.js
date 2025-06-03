@@ -47,7 +47,7 @@ export const createEmployee = async (req, res) => {
 
     const shift_Time = `${shiftData.startTime} to ${shiftData.endTime}`;
 
-    const hashedPassword = await bcrypt.hash(password, 10); // ✅ hash password
+    const hashedPassword = await bcrypt.hash(password, 10); // hash password
 
     const newEmployee = new employeeModel({
       Name,
@@ -105,6 +105,25 @@ export const getEmployeeById = async (req, res) => {
   }
 };
 
+//getAll employee
+export const getAllEmployee = async (req, res) => {
+  try {
+    const employee = await employeeServices.getAllEmployee()
+
+    if (!employee) {
+      return res.status(200).json({ message: "No any employee found!!" })
+    }
+
+    return res.status(200).json({
+      message: "Employee fetched successfully",
+      data: employee
+    });
+
+  } catch (error) {
+    return ThrowError(res, 500, error.message)
+  }
+}
+
 //edit employee
 export const editEmployee = async (req, res) => {
   try {
@@ -132,7 +151,6 @@ export const editEmployee = async (req, res) => {
       return ThrowError(res, 404, "Employee not found");
     }
 
-    // Delete old image if new one uploaded
     if (newImagePath && employee.emp_image && fs.existsSync(employee.emp_image)) {
       fs.unlinkSync(employee.emp_image);
     }
@@ -149,7 +167,6 @@ export const editEmployee = async (req, res) => {
     employee.shift = shift ?? employee.shift;
     if (newImagePath) employee.emp_image = newImagePath;
 
-    // Update password if provided
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
       employee.password = hashedPassword;
@@ -248,7 +265,6 @@ export const forgotEmployeePassword = async (req, res) => {
       return res.status(400).json({ message: "Employee Not Found" });
     }
 
-    // Add OTP & expiry to employee model (extend schema if needed)
     const otp = generateOTP();
     employee.resetOTP = otp;
     employee.otpExpires = Date.now() + 10 * 60 * 1000; // valid 10 minutes
@@ -347,7 +363,6 @@ export const resetPassword = async (req, res) => {
     return ThrowError(res, 500, error.message);
   }
 };
-
 
 // Change Password for Employee
 export const changeEmployeePassword = async (req, res) => {

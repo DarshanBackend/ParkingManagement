@@ -19,6 +19,15 @@ class EmployeeServices {
         }
     }
 
+    //Get All employee
+    async getAllEmployee() {
+        try {
+            return await employee.find();
+        } catch (error) {
+            return error.message
+        }
+    }
+
     // Get Single employee By Id
     async getEmployeeById(id) {
         try {

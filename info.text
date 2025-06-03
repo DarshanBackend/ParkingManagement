@@ -1,0 +1,100 @@
+addAdmin => http://localhost:3000/api/Admin/addAdmin
+getAdminById => http://localhost:3000/api/Admin/getAdminById/:id
+updateAdmin => http://localhost:3000/api/Admin/updateAdmin/:id
+deleteAdmin => http://localhost:3000/api/Admin/deleteAdmin/:id
+
+loginAdmin => http://localhost:3000/api/Admin/loginAdmin
+forgotPassword => http://localhost:3000/api/Admin/forgotPassword
+VerifyEmail => http://localhost:3000/api/Admin/VerifyEmail
+resetPassword => http://localhost:3000/api/Admin/resetPassword
+changePassword => http://localhost:3000/api/Admin/changePassword/query
+
+createEmployee => http://localhost:3000/api/employee/createEmployee
+getEmployeeById => http://localhost:3000/api/employee/getEmployeeById/:id
+getAllEmployee => http://localhost:3000/api/employee/getAllEmployee
+editEmployee => http://localhost:3000/api/employee/editEmployee/:id
+deleteEmployee => http://localhost:3000/api/employee/deleteEmployee/:id
+
+createShift => http://localhost:3000/api/shift/createShift
+getAllShifts => http://localhost:3000/api/shift/getAllShifts
+updateShift => http://localhost:3000/api/shift/updateShift/:id
+deleteShift => http://localhost:3000/api/shift/deleteShift/:id
+
+loginEmployee => http://localhost:3000/api/employee/loginEmployee
+forgotEmployeePassword => http://localhost:3000/api/employee/forgotEmployeePassword
+VerifyEmail => http://localhost:3000/api/employee/VerifyEmail
+resetPassword => http://localhost:3000/api/employee/resetPassword
+changeEmployeePassword => http://localhost:3000/api/employee/changeEmployeePassword/:id
+
+addVehicleDetails => http://localhost:3000/api/vehicle/addVehicleDetails
+getVehicleDetails => http://localhost:3000/api/vehicle/getVehicleDetails/:id
+getAllVehicleDetails => http://localhost:3000/api/vehicle/getAllVehicleDetails
+updateVehicleDetails => http://localhost:3000/api/vehicle/updateVehicleDetails/:id
+deleteVehicleDetails => http://localhost:3000/api/vehicle/deleteVehicleDetails/:id
+
+addParkingDetail => http://localhost:3000/api/parkingDetails/addParkingDetail
+updateParkingDetail => http://localhost:3000/api/parkingDetails/updateParkingDetail/:id
+deleteParkingDetail => http://localhost:3000/api/parkingDetails/deleteParkingDetail/:id
+getParkingDetails => http://localhost:3000/api/parkingDetails/getParkingDetails?date=2025-06-03
+getCollectionDetails => http://localhost:3000/api/parkingDetails/getCollectionDetails
+getParkingReport => http://localhost:3000/api/parkingDetails/getParkingReport
+getParkingHistory => http://localhost:3000/api/parkingDetails/getParkingHistory?from=2025-005-25&to=2025-06-31
+
+getCheckinSummary => http://localhost:3000/api/dashBoard/getCheckinSummary
+getParkingOverview => http://localhost:3000/api/dashBoard/getParkingOverview
+getParkingVolumeOverview => http://localhost:3000/api/dashBoard/getParkingVolumeOverview
+getRevenueAnalytics => http://localhost:3000/api/dashBoard/getRevenueAnalytics
+getBookingSummary => http://localhost:3000/api/dashBoard/getBookingSummary
+getParkingTypeSummary => http://localhost:3000/api/dashBoard/getParkingTypeSummary
+getCurrentRevenue => http://localhost:3000/api/dashBoard/getCurrentRevenue
+getTotalRevenue => http://localhost:3000/api/dashBoard/getTotalRevenue
+getHourlyRevenueToday => http://localhost:3000/api/dashBoard/getHourlyRevenueToday
+getRecentTransactions => http://localhost:3000/api/dashBoard/getRecentTransactions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

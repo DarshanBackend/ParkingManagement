@@ -171,7 +171,6 @@ export const forgotPassword = async (req, res) => {
             return res.status(400).json({ message: "admin Not Found" });
         }
 
-        // Ensure admin is a valid Mongoose document
         if (!(admin instanceof mongoose.Model)) {
             return res.status(500).json({ message: "Invalid admin data" });
         }
@@ -181,7 +180,7 @@ export const forgotPassword = async (req, res) => {
         admin.resetOTP = otp;
         admin.otpExpires = Date.now() + 10 * 60 * 1000; // OTP expires in 10 minutes
 
-        await admin.save(); // Save OTP in the database
+        await admin.save(); 
 
         // Configure Nodemailer
         const transporter = nodemailer.createTransport({

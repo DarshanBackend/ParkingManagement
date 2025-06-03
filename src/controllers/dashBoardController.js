@@ -37,6 +37,82 @@ export const getCheckinSummary = async (req, res) => {
 };
 
 // Get Parking Overview
+// export const getParkingOverview = async (req, res) => {
+//     try {
+//         const totalSlotsPerLevel = {
+//             "Level 1": 600,
+//             "Level 2": 600,
+//             "Level 3": 600,
+//             "Level 4": 600,
+//             "Level 5": 600
+//         };
+
+//         // Aggregate vehicle count grouped by level and type
+//         const bookedVehicles = await vehicleModel.aggregate([
+//             {
+//                 $match: {
+//                     slotNo: { $regex: /^Level \d+/i },
+//                     category: { $in: ["Car", "Truck", "Bike"] }
+//                 }
+//             },
+//             {
+//                 $addFields: {
+//                     level: {
+//                         $regexFind: {
+//                             input: "$slotNo",
+//                             regex: /(Level \d+)/i
+//                         }
+//                     }
+//                 }
+//             },
+//             {
+//                 $match: {
+//                     "level.match": { $ne: null }
+//                 }
+//             },
+//             {
+//                 $group: {
+//                     _id: {
+//                         level: "$level.match",
+//                         category: "$category"
+//                     },
+//                     count: { $sum: 1 }
+//                 }
+//             }
+//         ]);
+
+//         // Map results into a structured format
+//         const parkingMap = {};
+
+//         bookedVehicles.forEach(({ _id, count }) => {
+//             const { level, category } = _id;
+
+//             if (!parkingMap[level]) {
+//                 parkingMap[level] = { Car: 0, Truck: 0, Bike: 0 };
+//             }
+
+//             parkingMap[level][category] = count;
+//         });
+
+//         // Format response
+//         const result = Object.entries(totalSlotsPerLevel).map(([level, total]) => {
+//             const counts = parkingMap[level] || { Car: 0, Truck: 0, Bike: 0 };
+//             const used = counts.Car + counts.Truck + counts.Bike;
+
+//             return {
+//                 level,
+//                 totalSlots: total,
+//                 availableSlots: total - used,
+//                 vehicleCount: counts
+//             };
+//         });
+
+//         res.status(200).json(result);
+//     } catch (error) {
+//         console.error("Error in getParkingOverview:", error);
+//         res.status(500).json({ message: "Internal Server Error" });
+//     }
+// };
 export const getParkingOverview = async (req, res) => {
     try {
         const totalSlotsPerLevel = {
@@ -47,7 +123,7 @@ export const getParkingOverview = async (req, res) => {
             "Level 5": 600
         };
 
-        // Aggregate vehicle count grouped by level and type
+        // Aggregate booked vehicle count by level
         const bookedVehicles = await vehicleModel.aggregate([
             {
                 $match: {
@@ -72,38 +148,24 @@ export const getParkingOverview = async (req, res) => {
             },
             {
                 $group: {
-                    _id: {
-                        level: "$level.match",
-                        category: "$category"
-                    },
+                    _id: "$level.match",
                     count: { $sum: 1 }
                 }
             }
         ]);
 
-        // Map results into a structured format
-        const parkingMap = {};
-
-        bookedVehicles.forEach(({ _id, count }) => {
-            const { level, category } = _id;
-
-            if (!parkingMap[level]) {
-                parkingMap[level] = { Car: 0, Truck: 0, Bike: 0 };
-            }
-
-            parkingMap[level][category] = count;
-        });
-
-        // Format response
+        // Build result map
         const result = Object.entries(totalSlotsPerLevel).map(([level, total]) => {
-            const counts = parkingMap[level] || { Car: 0, Truck: 0, Bike: 0 };
-            const used = counts.Car + counts.Truck + counts.Bike;
+            const match = bookedVehicles.find(bv => bv._id === level);
+            const used = match ? match.count : 0;
+            const percentageUsed = Math.round((used / total) * 100);
 
             return {
                 level,
                 totalSlots: total,
+                usedSlots: used,
                 availableSlots: total - used,
-                vehicleCount: counts
+                percentageUsed: percentageUsed + "%"
             };
         });
 
@@ -136,7 +198,6 @@ export const getParkingVolumeOverview = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
-
 
 // Get Revenue Analytics 
 export const getRevenueAnalytics = async (req, res) => {
@@ -358,7 +419,6 @@ export const getRecentTransactions = async (req, res) => {
             .limit(5);
 
         const formatted = await Promise.all(vehicles.map(async (vehicle) => {
-            // Find corresponding parking detail
             const parkingDetail = await parkingDetailModel.findOne({ vehicleId: vehicle._id });
 
             let duration = "Time Missing";

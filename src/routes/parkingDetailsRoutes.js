@@ -1,5 +1,5 @@
 import express from "express"
-import { addParkingDetail, deleteParkingDetail, getCollectionDetails, getParkingDetails, getParkingReport, updateParkingDetail } from "../controllers/parkingDetailsController.js"
+import { addParkingDetail, deleteParkingDetail, getCollectionDetails, getParkingDetails, getParkingHistory, getParkingReport, updateParkingDetail } from "../controllers/parkingDetailsController.js"
 
 const parkingRoutes = express.Router()
 
@@ -12,6 +12,7 @@ parkingRoutes.get("/getCollectionDetails", getCollectionDetails)
 
 
 parkingRoutes.get("/getParkingReport", getParkingReport)
+parkingRoutes.get("/getParkingHistory", getParkingHistory)
 
 
 export default parkingRoutes

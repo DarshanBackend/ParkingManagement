@@ -23,13 +23,12 @@ export const createShift = async (req, res) => {
     }
 };
 
-
 export const getAllShifts = async (req, res) => {
     try {
         const shifts = await shiftModel.find();
 
         if (shifts.length === 0) {
-            return res.status(200).json({ message: "No shifts found.", data: [] });
+            return res.status(200).json({ message: "No shifts found." });
         }
 
         return res.status(200).json({

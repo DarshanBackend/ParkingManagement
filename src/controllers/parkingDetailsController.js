@@ -30,7 +30,6 @@ export const addParkingDetail = async (req, res) => {
 
         await newDetail.save();
 
-        // ✅ Format the response as per UI
         res.status(201).json({
             message: "Parking detail added successfully.",
             data: {
@@ -118,7 +117,7 @@ export const deleteParkingDetail = async (req, res) => {
 //getParkingDetails
 export const getParkingDetails = async (req, res) => {
     try {
-        const { date } = req.query; // Expecting format "YYYY-MM-DD"
+        const { date } = req.query; // format "YYYY-MM-DD"
 
         const filter = {};
 
@@ -145,91 +144,6 @@ export const getParkingDetails = async (req, res) => {
 };
 
 //getCollectionDetails
-// export const getCollectionDetails = async (req, res) => {
-//     try {
-//         const details = await parkingDetailsModel.aggregate([
-//             {
-//                 $lookup: {
-//                     from: "vehicles",
-//                     localField: "vehicleId",
-//                     foreignField: "_id",
-//                     as: "vehicle"
-//                 }
-//             },
-//             { $unwind: "$vehicle" },
-//             {
-//                 $project: {
-//                     date: {
-//                         $dateToString: { format: "%Y-%m-%d", date: "$entryTime" }
-//                     },
-//                     month: {
-//                         $dateToString: { format: "%b %Y", date: "$entryTime" }
-//                     },
-//                     parkingCharges: "$vehicle.parkingCharges",
-//                     paymentMethod: "$vehicle.paymentMethod"
-//                 }
-//             },
-//             {
-//                 $group: {
-//                     _id: {
-//                         month: "$month",
-//                         date: "$date"
-//                     },
-//                     totalAmount: { $sum: "$parkingCharges" },
-//                     online: {
-//                         $sum: {
-//                             $cond: [{ $eq: ["$paymentMethod", "Online"] }, "$parkingCharges", 0]
-//                         }
-//                     },
-//                     offline: {
-//                         $sum: {
-//                             $cond: [{ $eq: ["$paymentMethod", "Offline"] }, "$parkingCharges", 0]
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $group: {
-//                     _id: "$_id.month",
-//                     total: { $sum: "$totalAmount" },
-//                     days: {
-//                         $push: {
-//                             date: "$_id.date",
-//                             total: "$totalAmount",
-//                             details: {
-//                                 Online: "$online",
-//                                 Offline: "$offline"
-//                             }
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $sort: { _id: -1 }
-//             }
-//         ]);
-
-//         const totalCollection = details.reduce((sum, m) => sum + m.total, 0);
-
-//         const formatted = details.map(month => ({
-//             month: month._id,
-//             total: month.total,
-//             days: month.days.sort((a, b) => new Date(b.date) - new Date(a.date)).map(day => ({
-//                 date: moment(day.date).format("DD MMM YYYY"),
-//                 total: day.total,
-//                 ...(day.details.Online || day.details.Offline ? { details: day.details } : {})
-//             }))
-//         }));
-
-//         res.status(200).json({
-//             totalCollection,
-//             monthlyCollections: formatted
-//         });
-//     } catch (error) {
-//         res.status(500).json({ message: error.message });
-//     }
-// };
-
 export const getCollectionDetails = async (req, res) => {
     try {
         const details = await parkingDetailsModel.aggregate([
@@ -354,5 +268,30 @@ export const getParkingReport = async (req, res) => {
         res.status(200).json(formatted);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+//getParkingHistory
+export const getParkingHistory = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+
+        if (!from || !to) {
+            return res.status(400).json({ message: "From and To dates are required." });
+        }
+
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999); // include full 'to' day
+
+        const history = await parkingDetailsModel.find({
+            entryTime: { $gte: fromDate, $lte: toDate }
+        })
+            .populate("vehicleId", "vehicleNumber") // only fetch vehicleNumber from Vehicle model
+            .sort({ entryTime: -1 });
+
+        res.status(200).json({ history });
+    } catch (err) {
+        res.status(500).json({ message: "Server Error", error: err.message });
     }
 };
