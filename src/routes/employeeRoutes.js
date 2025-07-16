@@ -1,6 +1,7 @@
 import express from 'express';
 import { changeEmployeePassword, createEmployee, deleteEmployee, editEmployee, forgotEmployeePassword, getAllEmployee, getEmployeeById, loginEmployee, resetPassword, VerifyEmail } from '../controllers/employeeController.js';
 import upload, { convertJfifToJpeg } from '../middlewares/imageupload.js';
+import { verifyToken } from '../middlewares/auth.js';
 
 const employeeRoutes = express.Router();
 
@@ -13,8 +14,8 @@ employeeRoutes.delete("/deleteEmployee/:id", deleteEmployee)
 
 employeeRoutes.post("/loginEmployee", loginEmployee)
 employeeRoutes.post("/forgotEmployeePassword", forgotEmployeePassword)
-employeeRoutes.post("/VerifyEmail", VerifyEmail)
-employeeRoutes.post("/resetPassword", resetPassword)
-employeeRoutes.post("/changeEmployeePassword/:id", changeEmployeePassword)
+employeeRoutes.post("/VerifyEmail", verifyToken, VerifyEmail)
+employeeRoutes.post("/resetPassword", verifyToken, resetPassword)
+employeeRoutes.post("/changeEmployeePassword/:id", verifyToken, changeEmployeePassword)
 
 export default employeeRoutes

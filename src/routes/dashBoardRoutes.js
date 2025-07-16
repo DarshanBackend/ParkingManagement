@@ -1,20 +1,21 @@
 import express from "express"
 import { getBookingSummary, getCheckinSummary, getCurrentRevenue, getHourlyRevenueToday, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getRevenueAnalytics, getTotalRevenue } from "../controllers/dashBoardController.js"
+import { verifyToken } from "../middlewares/auth.js"
 
 const dashBoardRoutes = express.Router()
 
 //getCheckinSummary Routes
-dashBoardRoutes.get("/getCheckinSummary", getCheckinSummary)
-dashBoardRoutes.get("/getParkingOverview", getParkingOverview)
-dashBoardRoutes.get("/getParkingVolumeOverview", getParkingVolumeOverview)
-dashBoardRoutes.get("/getRevenueAnalytics", getRevenueAnalytics)
-dashBoardRoutes.get("/getBookingSummary", getBookingSummary)
-dashBoardRoutes.get("/getParkingTypeSummary", getParkingTypeSummary)
-dashBoardRoutes.get("/getCurrentRevenue", getCurrentRevenue)
+dashBoardRoutes.get("/getCheckinSummary", verifyToken, getCheckinSummary)
+dashBoardRoutes.get("/getParkingOverview", verifyToken, getParkingOverview)
+dashBoardRoutes.get("/getParkingVolumeOverview", verifyToken, getParkingVolumeOverview)
+dashBoardRoutes.get("/getRevenueAnalytics", verifyToken, getRevenueAnalytics)
+dashBoardRoutes.get("/getBookingSummary", verifyToken, getBookingSummary)
+dashBoardRoutes.get("/getParkingTypeSummary", verifyToken, getParkingTypeSummary)
+dashBoardRoutes.get("/getCurrentRevenue", verifyToken, getCurrentRevenue)
 
 //revenue data
-dashBoardRoutes.get("/getTotalRevenue", getTotalRevenue)
-dashBoardRoutes.get("/getHourlyRevenueToday", getHourlyRevenueToday)
-dashBoardRoutes.get("/getRecentTransactions", getRecentTransactions)
+dashBoardRoutes.get("/getTotalRevenue", verifyToken, getTotalRevenue)
+dashBoardRoutes.get("/getHourlyRevenueToday", verifyToken, getHourlyRevenueToday)
+dashBoardRoutes.get("/getRecentTransactions", verifyToken, getRecentTransactions)
 
 export default dashBoardRoutes

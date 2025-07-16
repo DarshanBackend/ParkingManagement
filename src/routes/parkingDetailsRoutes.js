@@ -1,18 +1,20 @@
 import express from "express"
 import { addParkingDetail, deleteParkingDetail, getCollectionDetails, getParkingDetails, getParkingHistory, getParkingReport, updateParkingDetail } from "../controllers/parkingDetailsController.js"
+import { verifyToken, isUser } from "../middlewares/auth.js"
+
 
 const parkingRoutes = express.Router()
 
 
-parkingRoutes.post("/addParkingDetail", addParkingDetail)
-parkingRoutes.put("/updateParkingDetail/:id", updateParkingDetail)
-parkingRoutes.delete("/deleteParkingDetail/:id", deleteParkingDetail)
-parkingRoutes.get("/getParkingDetails", getParkingDetails)
-parkingRoutes.get("/getCollectionDetails", getCollectionDetails)
+parkingRoutes.post("/addParkingDetail", verifyToken, isUser, addParkingDetail)
+parkingRoutes.put("/updateParkingDetail/:id", verifyToken, isUser, updateParkingDetail)
+parkingRoutes.delete("/deleteParkingDetail/:id", verifyToken, isUser, deleteParkingDetail)
+parkingRoutes.get("/getParkingDetails", verifyToken, isUser, getParkingDetails)
+parkingRoutes.get("/getCollectionDetails", verifyToken, isUser, getCollectionDetails)
 
 
-parkingRoutes.get("/getParkingReport", getParkingReport)
-parkingRoutes.get("/getParkingHistory", getParkingHistory)
+parkingRoutes.get("/getParkingReport", verifyToken, isUser, getParkingReport)
+parkingRoutes.get("/getParkingHistory", verifyToken, isUser, getParkingHistory)
 
 
 export default parkingRoutes
