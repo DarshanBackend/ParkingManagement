@@ -199,8 +199,8 @@ export const getParkingVolumeOverview = async (req, res) => {
     }
 };
 
-// Get Revenue Analytics 
-export const getRevenueAnalytics = async (req, res) => {
+// Get Revenue Analytics Weekly
+export const getWeeklyRevenueAnalytics = async (req, res) => {
     try {
         const today = moment().startOf('day');
         const series = [];
@@ -246,6 +246,103 @@ export const getRevenueAnalytics = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
+
+// Get Revenue Analytics Monthly
+export const getMonthlyRevenueAnalytics = async (req, res) => {
+    try {
+        const today = moment().startOf('day');
+        const series = [];
+
+        for (let i = 29; i >= 0; i--) {
+            const date = moment(today).subtract(i, 'days');
+            const nextDate = moment(date).add(1, 'day');
+
+            const revenueData = await vehicleModel.aggregate([
+                {
+                    $match: {
+                        createdAt: {
+                            $gte: date.toDate(),
+                            $lt: nextDate.toDate()
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: { $sum: "$parkingCharges" }
+                    }
+                }
+            ]);
+
+            const revenue = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
+
+            series.push({
+                date: date.format("YYYY-MM-DD"),
+                revenue
+            });
+        }
+
+        const todayRevenue = series[29].revenue;
+        const yesterdayRevenue = series[28].revenue;
+
+        res.status(200).json({
+            today: todayRevenue,
+            yesterday: yesterdayRevenue,
+            series
+        });
+    } catch (error) {
+        return ThrowError(res, 500, error.message);
+    }
+};
+
+// Get Revenue Analytics Yearly
+export const getYearlyRevenueAnalytics = async (req, res) => {
+    try {
+        const currentMonth = moment().startOf('month');
+        const series = [];
+
+        for (let i = 11; i >= 0; i--) {
+            const startOfMonth = moment(currentMonth).subtract(i, 'months').startOf('month');
+            const endOfMonth = moment(startOfMonth).endOf('month');
+
+            const revenueData = await vehicleModel.aggregate([
+                {
+                    $match: {
+                        createdAt: {
+                            $gte: startOfMonth.toDate(),
+                            $lte: endOfMonth.toDate()
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: { $sum: "$parkingCharges" }
+                    }
+                }
+            ]);
+
+            const revenue = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
+
+            series.push({
+                month: startOfMonth.format("YYYY-MM"),
+                revenue
+            });
+        }
+
+        const thisMonthRevenue = series[11].revenue;
+        const lastMonthRevenue = series[10].revenue;
+
+        res.status(200).json({
+            thisMonth: thisMonthRevenue,
+            lastMonth: lastMonthRevenue,
+            series
+        });
+    } catch (error) {
+        return ThrowError(res, 500, error.message);
+    }
+};
+
 
 // Get Booking Summary
 export const getBookingSummary = async (req, res) => {

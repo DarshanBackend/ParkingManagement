@@ -1,5 +1,5 @@
 import express from "express"
-import { getBookingSummary, getCheckinSummary, getCurrentRevenue, getHourlyRevenueToday, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getRevenueAnalytics, getTotalRevenue } from "../controllers/dashBoardController.js"
+import { getBookingSummary, getCheckinSummary, getCurrentRevenue, getHourlyRevenueToday, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
 import { verifyToken } from "../middlewares/auth.js"
 
 const dashBoardRoutes = express.Router()
@@ -8,7 +8,9 @@ const dashBoardRoutes = express.Router()
 dashBoardRoutes.get("/getCheckinSummary", verifyToken, getCheckinSummary)
 dashBoardRoutes.get("/getParkingOverview", verifyToken, getParkingOverview)
 dashBoardRoutes.get("/getParkingVolumeOverview", verifyToken, getParkingVolumeOverview)
-dashBoardRoutes.get("/getRevenueAnalytics", verifyToken, getRevenueAnalytics)
+dashBoardRoutes.get("/getWeeklyRevenueAnalytics", verifyToken, getWeeklyRevenueAnalytics)
+dashBoardRoutes.get("/getMonthlyRevenueAnalytics", verifyToken, getMonthlyRevenueAnalytics)
+dashBoardRoutes.get("/getYearlyRevenueAnalytics", verifyToken, getYearlyRevenueAnalytics)
 dashBoardRoutes.get("/getBookingSummary", verifyToken, getBookingSummary)
 dashBoardRoutes.get("/getParkingTypeSummary", verifyToken, getParkingTypeSummary)
 dashBoardRoutes.get("/getCurrentRevenue", verifyToken, getCurrentRevenue)
