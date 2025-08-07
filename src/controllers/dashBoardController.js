@@ -422,37 +422,90 @@ export const getCurrentRevenue = async (req, res) => {
 // getTotalRevenue
 export const getTotalRevenue = async (req, res) => {
     try {
+        const todayStart = moment().startOf('day').toDate();
+        const todayEnd = moment().endOf('day').toDate();
+        const yesterdayStart = moment().subtract(1, 'day').startOf('day').toDate();
+        const yesterdayEnd = moment().subtract(1, 'day').endOf('day').toDate();
+
         const result = await vehicleModel.aggregate([
             {
                 $project: {
                     parkingCharges: 1,
-                    paymentMethod: { $toLower: "$paymentMethod" }
+                    paymentMethod: { $toLower: "$paymentMethod" },
+                    createdAt: 1
                 }
             },
             {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: "$parkingCharges" },
-                    online: {
-                        $sum: {
-                            $cond: [{ $eq: ["$paymentMethod", "online"] }, "$parkingCharges", 0]
+                $facet: {
+                    overall: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalRevenue: { $sum: "$parkingCharges" },
+                                online: {
+                                    $sum: {
+                                        $cond: [{ $eq: ["$paymentMethod", "online"] }, "$parkingCharges", 0]
+                                    }
+                                },
+                                offline: {
+                                    $sum: {
+                                        $cond: [{ $eq: ["$paymentMethod", "offline"] }, "$parkingCharges", 0]
+                                    }
+                                }
+                            }
                         }
-                    },
-                    offline: {
-                        $sum: {
-                            $cond: [{ $eq: ["$paymentMethod", "offline"] }, "$parkingCharges", 0]
+                    ],
+                    today: [
+                        {
+                            $match: {
+                                createdAt: { $gte: todayStart, $lte: todayEnd }
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                todayRevenue: { $sum: "$parkingCharges" }
+                            }
                         }
-                    }
+                    ],
+                    yesterday: [
+                        {
+                            $match: {
+                                createdAt: { $gte: yesterdayStart, $lte: yesterdayEnd }
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                yesterdayRevenue: { $sum: "$parkingCharges" }
+                            }
+                        }
+                    ]
                 }
             }
         ]);
 
-        const data = result[0] || { totalRevenue: 0, online: 0, offline: 0 };
+        const overall = result[0]?.overall[0] || { totalRevenue: 0, online: 0, offline: 0 };
+        const todayRevenue = result[0]?.today[0]?.todayRevenue || 0;
+        const yesterdayRevenue = result[0]?.yesterday[0]?.yesterdayRevenue || 0;
+
+        let percentChange = 0;
+        let direction = "no change";
+
+        if (yesterdayRevenue === 0 && todayRevenue > 0) {
+            percentChange = 100;
+            direction = "increase";
+        } else if (yesterdayRevenue > 0) {
+            percentChange = Math.abs(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100).toFixed(2);
+            direction = todayRevenue > yesterdayRevenue ? "increase" : todayRevenue < yesterdayRevenue ? "decrease" : "no change";
+        }
 
         res.status(200).json({
-            totalRevenue: data.totalRevenue,
-            online: data.online,
-            offline: data.offline
+            totalRevenue: overall.totalRevenue,
+            online: overall.online,
+            offline: overall.offline,
+            percentChange: parseFloat(percentChange),
+            direction
         });
     } catch (error) {
         return ThrowError(res, 500, error.message);
@@ -509,54 +562,159 @@ export const getHourlyRevenueToday = async (req, res) => {
 //getRecentTransactions
 export const getRecentTransactions = async (req, res) => {
     try {
-        // Get latest 5 vehicle entries
-        const vehicles = await vehicleModel
-            .find({})
+          const now = new Date();
+
+        const transactions = await parkingDetailModel.find()
             .sort({ createdAt: -1 })
-            .limit(5);
+            .limit(5)
+            .populate('vehicleId');
 
-        const formatted = await Promise.all(vehicles.map(async (vehicle) => {
-            const parkingDetail = await parkingDetailModel.findOne({ vehicleId: vehicle._id });
+        const result = transactions.map(detail => {
+            const vehicle = detail.vehicleId;
 
-            let duration = "Time Missing";
+            // ⏱️ Duration calculation
+            const durationInMinutes = Math.round(
+                (now - new Date(detail.createdAt)) / (1000 * 60)
+            );
 
-            if (parkingDetail && parkingDetail.entryTime && parkingDetail.exitTime) {
-                const inTime = moment(parkingDetail.entryTime);
-                const outTime = moment(parkingDetail.exitTime);
+            const hours = Math.floor(durationInMinutes / 60);
+            const minutes = durationInMinutes % 60;
 
-                if (inTime.isValid() && outTime.isValid()) {
-                    const diffMinutes = outTime.diff(inTime, "minutes");
-
-                    if (diffMinutes >= 0) {
-                        if (diffMinutes >= 60) {
-                            const hours = Math.floor(diffMinutes / 60);
-                            const mins = diffMinutes % 60;
-                            duration = mins > 0
-                                ? `${hours} hr ${mins} min Duration`
-                                : `${hours} hr Duration`;
-                        } else {
-                            duration = `${diffMinutes} min Duration`;
-                        }
-                    } else {
-                        duration = "Invalid Duration";
-                    }
-                } else {
-                    duration = "Invalid Time";
-                }
-            }
+            const durationText =
+                `${hours} hr${hours !== 1 ? 's' : ''} ` +
+                `${minutes} min${minutes !== 1 ? 's' : ''} Duration`;
 
             return {
-                vehicleNumber: vehicle.vehicleNumber?.trim(),
-                vehicleType: vehicle.category,
-                amount: vehicle.parkingCharges,
-                duration,
-                createdAt: vehicle.createdAt
+                vehicleType: vehicle?.category || 'Unknown',
+                vehicleNumber: vehicle?.vehicleNumber || 'Unknown',
+                duration: durationText,
+                amount: vehicle?.parkingCharges || 0,
             };
-        }));
+        });
 
-        res.status(200).json(formatted);
+        res.status(200).json({ recentTransactions: result });
     } catch (error) {
         console.error("getRecentTransactions error:", error);
         return ThrowError(res, 500, error.message);
     }
 };
+
+
+// export const getCheckinSummaryByLevel = async (req, res) => {
+//     try {
+//         const summary = await parkingDetailModel.aggregate([
+//             {
+//                 $lookup: {
+//                     from: "vehicles",
+//                     localField: "vehicleId",
+//                     foreignField: "_id",
+//                     as: "vehicle"
+//                 }
+//             },
+//             { $unwind: "$vehicle" },
+
+//             // Extract level from slotNo (e.g., L1-S02 → Level 1)
+//             {
+//                 $addFields: {
+//                     level: {
+//                         $concat: [
+//                             "Level ",
+//                             {
+//                                 $arrayElemAt: [
+//                                     {
+//                                         $split: ["$vehicle.slotNo", "-"]
+//                                     },
+//                                     0
+//                                 ]
+//                             }
+//                         ]
+//                     }
+//                 }
+//             },
+
+//             {
+//                 $group: {
+//                     _id: {
+//                         level: "$level",
+//                         category: "$vehicle.category"
+//                     },
+//                     count: { $sum: 1 }
+//                 }
+//             },
+
+//             {
+//                 $group: {
+//                     _id: "$_id.level",
+//                     vehicles: {
+//                         $push: {
+//                             category: "$_id.category",
+//                             count: "$count"
+//                         }
+//                     }
+//                 }
+//             },
+
+//             {
+//                 $project: {
+//                     level: "$_id",
+//                     _id: 0,
+//                     car: {
+//                         $ifNull: [
+//                             {
+//                                 $first: {
+//                                     $filter: {
+//                                         input: "$vehicles",
+//                                         as: "v",
+//                                         cond: { $eq: ["$$v.category", "Car"] }
+//                                     }
+//                                 }
+//                             }, { count: 0 }
+//                         ]
+//                     },
+//                     bike: {
+//                         $ifNull: [
+//                             {
+//                                 $first: {
+//                                     $filter: {
+//                                         input: "$vehicles",
+//                                         as: "v",
+//                                         cond: { $eq: ["$$v.category", "Bike"] }
+//                                     }
+//                                 }
+//                             }, { count: 0 }
+//                         ]
+//                     },
+//                     truck: {
+//                         $ifNull: [
+//                             {
+//                                 $first: {
+//                                     $filter: {
+//                                         input: "$vehicles",
+//                                         as: "v",
+//                                         cond: { $eq: ["$$v.category", "Truck"] }
+//                                     }
+//                                 }
+//                             }, { count: 0 }
+//                         ]
+//                     }
+//                 }
+//             },
+
+//             {
+//                 $project: {
+//                     level: 1,
+//                     car: "$car.count",
+//                     bike: "$bike.count",
+//                     truck: "$truck.count"
+//                 }
+//             },
+
+//             { $sort: { level: 1 } }
+//         ]);
+
+//         res.status(200).json(summary);
+//     } catch (error) {
+//         console.error("Error in getCheckinSummaryByLevel:", error);
+//         return ThrowError(res, 500, error.message);
+//     }
+// };

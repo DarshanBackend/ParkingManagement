@@ -8,20 +8,52 @@ export const addParkingDetail = async (req, res) => {
     try {
         const { vehicleId, entryTime, exitTime } = req.body;
 
+        // 🔍 Basic validation
         if (!vehicleId || !entryTime || !exitTime) {
-            return res.status(400).json({ message: "vehicleId, entryTime, and exitTime are required." });
+            return res.status(400).json({
+                message: "vehicleId, entryTime, and exitTime are required."
+            });
         }
 
+        // 🔍 Ensure vehicle exists
         const vehicle = await vehicalModel.findById(vehicleId);
         if (!vehicle) {
             return res.status(404).json({ message: "Vehicle not found." });
         }
 
+        // 🕐 Format today's date with entry/exit times
         const today = moment().format("YYYY-MM-DD");
 
-        const entryDateTime = moment(`${today} ${entryTime}`, "YYYY-MM-DD hh:mm A").toDate();
-        const exitDateTime = moment(`${today} ${exitTime}`, "YYYY-MM-DD hh:mm A").toDate();
+        const entryDateTime = moment(
+            `${today} ${entryTime}`,
+            "YYYY-MM-DD hh:mm A"
+        ).toDate();
 
+        const exitDateTime = moment(
+            `${today} ${exitTime}`,
+            "YYYY-MM-DD hh:mm A"
+        ).toDate();
+
+        // ❗ Validation: Entry must be before exit
+        if (entryDateTime >= exitDateTime) {
+            return res.status(400).json({
+                message: "Entry time must be before exit time."
+            });
+        }
+
+        // 🔄 Check for existing entry (loose duplicate check)
+        const exists = await parkingDetailsModel.findOne({
+            vehicleId,
+            entryTime: entryDateTime
+        });
+
+        if (exists) {
+            return res.status(409).json({
+                message: "Duplicate entry. Parking detail already exists for this time."
+            });
+        }
+
+        // ✅ Save to DB
         const newDetail = new parkingDetailsModel({
             vehicleId,
             entryTime: entryDateTime,
@@ -30,6 +62,10 @@ export const addParkingDetail = async (req, res) => {
 
         await newDetail.save();
 
+        // ⏱️ Calculate parking duration
+        const duration = moment(exitDateTime).diff(moment(entryDateTime), 'minutes');
+
+        // 📦 Send response
         res.status(201).json({
             message: "Parking detail added successfully.",
             data: {
@@ -43,10 +79,12 @@ export const addParkingDetail = async (req, res) => {
                     date: moment(exitDateTime).format("DD-MMM-YYYY"),
                     time: moment(exitDateTime).format("hh:mm A")
                 },
+                duration: `${duration} Mins`,
                 createdAt: newDetail.createdAt,
                 updatedAt: newDetail.updatedAt
             }
         });
+
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

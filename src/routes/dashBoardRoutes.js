@@ -6,6 +6,7 @@ const dashBoardRoutes = express.Router()
 
 //getCheckinSummary Routes
 dashBoardRoutes.get("/getCheckinSummary", verifyToken, getCheckinSummary)
+// dashBoardRoutes.get("/getCheckinSummaryByLevel", verifyToken, getCheckinSummaryByLevel)
 dashBoardRoutes.get("/getParkingOverview", verifyToken, getParkingOverview)
 dashBoardRoutes.get("/getParkingVolumeOverview", verifyToken, getParkingVolumeOverview)
 dashBoardRoutes.get("/getWeeklyRevenueAnalytics", verifyToken, getWeeklyRevenueAnalytics)
