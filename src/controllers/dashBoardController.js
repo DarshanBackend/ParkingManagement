@@ -1,6 +1,7 @@
 import { ThrowError } from "../utils/Errorutils.js";
 import parkingDetailModel from "../models/parkingDetailsModel.js";
 import vehicleModel from "../models/vehicleModel.js";
+import Level from "../models/levelModel.js";
 import moment from "moment";
 
 //getCheckingSummary
@@ -36,83 +37,56 @@ export const getCheckinSummary = async (req, res) => {
     }
 };
 
+export const getLevelSlotSummaryById = async (req, res) => {
+    try {
+        const { levelId } = req.params;
+
+        const level = await Level.findById(levelId);
+        if (!level) {
+            return res.status(404).json({ message: "Level not found" });
+        }
+
+        if (!level.slots || level.slots.length === 0) {
+            return res.status(200).json({
+                level: level.levelName,
+                availableSpaces: 0,
+                car: 0,
+                bike: 0,
+                truck: 0
+            });
+        }
+
+        let car = 0;
+        let bike = 0;
+        let truck = 0;
+
+        level.slots.forEach(slot => {
+            const category = slot.category?.toLowerCase();
+
+            if (slot.isAvailable) {
+                if (category === "car") car++;
+                else if (category === "bike") bike++;
+                else if (category === "truck") truck++;
+            }
+        });
+
+        const totalAvailable = car + bike + truck;
+
+        res.status(200).json({
+            level: level.levelName,
+            availableSpaces: totalAvailable,
+            car,
+            bike,
+            truck
+        });
+
+    } catch (error) {
+        console.error("Error in getLevelSlotSummaryById:", error);
+        return res.status(500).json({ message: error.message });
+    }
+};
+
 // Get Parking Overview
-// export const getParkingOverview = async (req, res) => {
-//     try {
-//         const totalSlotsPerLevel = {
-//             "Level 1": 600,
-//             "Level 2": 600,
-//             "Level 3": 600,
-//             "Level 4": 600,
-//             "Level 5": 600
-//         };
-
-//         // Aggregate vehicle count grouped by level and type
-//         const bookedVehicles = await vehicleModel.aggregate([
-//             {
-//                 $match: {
-//                     slotNo: { $regex: /^Level \d+/i },
-//                     category: { $in: ["Car", "Truck", "Bike"] }
-//                 }
-//             },
-//             {
-//                 $addFields: {
-//                     level: {
-//                         $regexFind: {
-//                             input: "$slotNo",
-//                             regex: /(Level \d+)/i
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $match: {
-//                     "level.match": { $ne: null }
-//                 }
-//             },
-//             {
-//                 $group: {
-//                     _id: {
-//                         level: "$level.match",
-//                         category: "$category"
-//                     },
-//                     count: { $sum: 1 }
-//                 }
-//             }
-//         ]);
-
-//         // Map results into a structured format
-//         const parkingMap = {};
-
-//         bookedVehicles.forEach(({ _id, count }) => {
-//             const { level, category } = _id;
-
-//             if (!parkingMap[level]) {
-//                 parkingMap[level] = { Car: 0, Truck: 0, Bike: 0 };
-//             }
-
-//             parkingMap[level][category] = count;
-//         });
-
-//         // Format response
-//         const result = Object.entries(totalSlotsPerLevel).map(([level, total]) => {
-//             const counts = parkingMap[level] || { Car: 0, Truck: 0, Bike: 0 };
-//             const used = counts.Car + counts.Truck + counts.Bike;
-
-//             return {
-//                 level,
-//                 totalSlots: total,
-//                 availableSlots: total - used,
-//                 vehicleCount: counts
-//             };
-//         });
-
-//         res.status(200).json(result);
-//     } catch (error) {
-//         console.error("Error in getParkingOverview:", error);
-//         res.status(500).json({ message: "Internal Server Error" });
-//     }
-// };
 export const getParkingOverview = async (req, res) => {
     try {
         const totalSlotsPerLevel = {
@@ -562,7 +536,7 @@ export const getHourlyRevenueToday = async (req, res) => {
 //getRecentTransactions
 export const getRecentTransactions = async (req, res) => {
     try {
-          const now = new Date();
+        const now = new Date();
 
         const transactions = await parkingDetailModel.find()
             .sort({ createdAt: -1 })
@@ -598,123 +572,3 @@ export const getRecentTransactions = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
-
-
-// export const getCheckinSummaryByLevel = async (req, res) => {
-//     try {
-//         const summary = await parkingDetailModel.aggregate([
-//             {
-//                 $lookup: {
-//                     from: "vehicles",
-//                     localField: "vehicleId",
-//                     foreignField: "_id",
-//                     as: "vehicle"
-//                 }
-//             },
-//             { $unwind: "$vehicle" },
-
-//             // Extract level from slotNo (e.g., L1-S02 → Level 1)
-//             {
-//                 $addFields: {
-//                     level: {
-//                         $concat: [
-//                             "Level ",
-//                             {
-//                                 $arrayElemAt: [
-//                                     {
-//                                         $split: ["$vehicle.slotNo", "-"]
-//                                     },
-//                                     0
-//                                 ]
-//                             }
-//                         ]
-//                     }
-//                 }
-//             },
-
-//             {
-//                 $group: {
-//                     _id: {
-//                         level: "$level",
-//                         category: "$vehicle.category"
-//                     },
-//                     count: { $sum: 1 }
-//                 }
-//             },
-
-//             {
-//                 $group: {
-//                     _id: "$_id.level",
-//                     vehicles: {
-//                         $push: {
-//                             category: "$_id.category",
-//                             count: "$count"
-//                         }
-//                     }
-//                 }
-//             },
-
-//             {
-//                 $project: {
-//                     level: "$_id",
-//                     _id: 0,
-//                     car: {
-//                         $ifNull: [
-//                             {
-//                                 $first: {
-//                                     $filter: {
-//                                         input: "$vehicles",
-//                                         as: "v",
-//                                         cond: { $eq: ["$$v.category", "Car"] }
-//                                     }
-//                                 }
-//                             }, { count: 0 }
-//                         ]
-//                     },
-//                     bike: {
-//                         $ifNull: [
-//                             {
-//                                 $first: {
-//                                     $filter: {
-//                                         input: "$vehicles",
-//                                         as: "v",
-//                                         cond: { $eq: ["$$v.category", "Bike"] }
-//                                     }
-//                                 }
-//                             }, { count: 0 }
-//                         ]
-//                     },
-//                     truck: {
-//                         $ifNull: [
-//                             {
-//                                 $first: {
-//                                     $filter: {
-//                                         input: "$vehicles",
-//                                         as: "v",
-//                                         cond: { $eq: ["$$v.category", "Truck"] }
-//                                     }
-//                                 }
-//                             }, { count: 0 }
-//                         ]
-//                     }
-//                 }
-//             },
-
-//             {
-//                 $project: {
-//                     level: 1,
-//                     car: "$car.count",
-//                     bike: "$bike.count",
-//                     truck: "$truck.count"
-//                 }
-//             },
-
-//             { $sort: { level: 1 } }
-//         ]);
-
-//         res.status(200).json(summary);
-//     } catch (error) {
-//         console.error("Error in getCheckinSummaryByLevel:", error);
-//         return ThrowError(res, 500, error.message);
-//     }
-// };

@@ -9,6 +9,7 @@ import shiftRoutes from "./src/routes/shiftRoutes.js";
 import vehicleRoutes from "./src/routes/vehicleRoutes.js";
 import parkingRoutes from "./src/routes/parkingDetailsRoutes.js";
 import dashBoardRoutes from "./src/routes/dashBoardRoutes.js";
+import levelRoutes from "./src/routes/levelRoutes.js";
 dotenv.config();
 
 const port = process.env.PORT;
@@ -25,6 +26,9 @@ app.use("/api/employee", employeeRoutes)
 
 //shift Route
 app.use("/api/shift", shiftRoutes)
+
+//level Routes
+app.use("/api/level", levelRoutes)
 
 //vehicle Routes
 app.use("/api/vehicle", vehicleRoutes)

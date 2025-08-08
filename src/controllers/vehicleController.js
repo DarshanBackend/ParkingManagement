@@ -1,31 +1,44 @@
-import { compare } from "bcrypt";
+import mongoose from "mongoose";
 import vehicalModel from "../models/vehicleModel.js";
+import Level from "../models/levelModel.js"
 import { ThrowError } from "../utils/Errorutils.js";
 
 // Add Vehicle Details
 export const addVehicleDetails = async (req, res) => {
     try {
-        const { mobile, vehicleNumber, slotNo } = req.body;
+        const { mobile, vehicleNumber, slotId } = req.body;
 
-        if (!mobile || !vehicleNumber) {
-            return res.status(400).json({ message: "Mobile , vehicle and slotNo number are required." });
+        if (!mobile || !vehicleNumber || !slotId) {
+            return res.status(400).json({ message: "Mobile, vehicleNumber, and slotId are required." });
         }
 
-        // Check for existing vehicle with same mobile number
-        const existingVehicle = await vehicalModel.findOne({ mobile });
-        if (existingVehicle) {
+        // Validate slotId
+        if (!mongoose.Types.ObjectId.isValid(slotId)) {
+            return res.status(400).json({ message: "Invalid slotId." });
+        }
+
+        // Find if slot exists in any level
+        const levelWithSlot = await Level.findOne({ "slots._id": slotId });
+        if (!levelWithSlot) {
+            return res.status(404).json({ message: "Slot not found in any level." });
+        }
+
+        // Check for duplicate mobile
+        const existingMobile = await vehicalModel.findOne({ mobile });
+        if (existingMobile) {
             return res.status(409).json({ message: "Vehicle with this mobile number already exists." });
         }
 
-        // Optionally check if vehicleNumber is already used
+        // Check for duplicate vehicleNumber
         const existingVehicleNumber = await vehicalModel.findOne({ vehicleNumber });
         if (existingVehicleNumber) {
             return res.status(409).json({ message: "Vehicle number already exists." });
         }
 
-        const existingVehicleslotNo = await vehicalModel.findOne({ slotNo })
-        if (existingVehicleslotNo) {
-            return res.status(409).json({ message: "Vehicle slotNo already Booked." });
+        // Check if slot is already booked
+        const isSlotBooked = await vehicalModel.findOne({ slotId });
+        if (isSlotBooked) {
+            return res.status(409).json({ message: "This slot is already booked." });
         }
 
         const vehicle = new vehicalModel(req.body);
@@ -75,12 +88,76 @@ export const getAllVehicleDetails = async (req, res) => {
 // Update Vehicle Details
 export const updateVehicleDetails = async (req, res) => {
     try {
-        const vehicle = await vehicalModel.findByIdAndUpdate(req.params.id, req.body, {
-            new: true
-        });
-        if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
+        const { id } = req.params;
+        const { mobile, vehicleNumber, slotId } = req.body;
 
-        res.status(200).json({ message: "Vehicle details updated", vehicle });
+        // Check if the vehicle ID is valid
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: "Invalid vehicle ID." });
+        }
+
+        // Check if the vehicle exists
+        const existingVehicle = await vehicalModel.findById(id);
+        if (!existingVehicle) {
+            return res.status(404).json({ message: "Vehicle not found." });
+        }
+
+        // Validate slotId if it is being updated
+        if (slotId) {
+            if (!mongoose.Types.ObjectId.isValid(slotId)) {
+                return res.status(400).json({ message: "Invalid slotId." });
+            }
+
+            const levelWithSlot = await Level.findOne({
+                "slots._id": new mongoose.Types.ObjectId(slotId)
+            });
+
+            if (!levelWithSlot) {
+                return res.status(404).json({ message: "Slot not found in any level." });
+            }
+
+            // Check if the slot is already booked by another vehicle
+            const isSlotBooked = await vehicalModel.findOne({
+                slotId: slotId,
+                _id: { $ne: id },
+            });
+
+            if (isSlotBooked) {
+                return res.status(409).json({ message: "This slot is already booked." });
+            }
+        }
+
+        // Validate mobile
+        if (mobile) {
+            const existingMobile = await vehicalModel.findOne({
+                mobile: mobile,
+                _id: { $ne: id },
+            });
+            if (existingMobile) {
+                return res.status(409).json({ message: "Mobile number already in use." });
+            }
+        }
+
+        // Validate vehicle number
+        if (vehicleNumber) {
+            const existingVehicleNumber = await vehicalModel.findOne({
+                vehicleNumber: vehicleNumber,
+                _id: { $ne: id },
+            });
+            if (existingVehicleNumber) {
+                return res.status(409).json({ message: "Vehicle number already exists." });
+            }
+        }
+
+        // Update vehicle
+        const updatedVehicle = await vehicalModel.findByIdAndUpdate(id, req.body, {
+            new: true,
+        });
+
+        return res.status(200).json({
+            message: "Vehicle details updated",
+            vehicle: updatedVehicle,
+        });
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }

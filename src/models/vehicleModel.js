@@ -19,8 +19,8 @@ const vehicleSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    slotNo: {
-        type: String,
+    slotId: {
+        type: mongoose.Schema.Types.ObjectId,
         required: true
     },
     parkingLocation: {
