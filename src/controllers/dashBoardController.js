@@ -1,87 +1,52 @@
 import { ThrowError } from "../utils/Errorutils.js";
 import parkingDetailModel from "../models/parkingDetailsModel.js";
 import vehicleModel from "../models/vehicleModel.js";
-import Level from "../models/levelModel.js";
 import moment from "moment";
-
-//getCheckingSummary
-export const getCheckinSummary = async (req, res) => {
-    try {
-        const summary = await parkingDetailModel.aggregate([
-            {
-                $lookup: {
-                    from: "vehicles",
-                    localField: "vehicleId",
-                    foreignField: "_id",
-                    as: "vehicle"
-                }
-            },
-            { $unwind: "$vehicle" },
-            {
-                $group: {
-                    _id: "$vehicle.category",
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        const formatted = {
-            car: summary.find(v => v._id === "Car")?.count || 0,
-            bike: summary.find(v => v._id === "Bike")?.count || 0,
-            truck: summary.find(v => v._id === "Truck")?.count || 0
-        };
-
-        res.status(200).json(formatted);
-    } catch (error) {
-        return ThrowError(res, 500, error.message);
-    }
-};
+import levelModel from "../models/levelModel.js";
 
 export const getLevelSlotSummaryById = async (req, res) => {
     try {
         const { levelId } = req.params;
 
-        const level = await Level.findById(levelId);
-        if (!level) {
-            return res.status(404).json({ message: "Level not found" });
-        }
+        const level = await levelModel.findById(levelId).lean();
+        if (!level) return res.status(404).json({ message: "Level not found" });
 
-        if (!level.slots || level.slots.length === 0) {
-            return res.status(200).json({
-                level: level.levelName,
-                availableSpaces: 0,
-                car: 0,
-                bike: 0,
-                truck: 0
-            });
-        }
+        const totalSlots = level.slots.length;
+        const availableSlots = level.slots.filter(s => s.isAvailable).length;
 
-        let car = 0;
-        let bike = 0;
-        let truck = 0;
+        let totalCar = 0;
+        let totalBike = 0;
+        let totalTruck = 0;
 
-        level.slots.forEach(slot => {
-            const category = slot.category?.toLowerCase();
-
-            if (slot.isAvailable) {
-                if (category === "car") car++;
-                else if (category === "bike") bike++;
-                else if (category === "truck") truck++;
+        for (const slot of level.slots) {
+            if (!slot.isAvailable) {
+                // Find vehicle parked here
+                const vehicle = await vehicleModel.findOne({ slotId: slot._id }).lean();
+                if (vehicle) {
+                    const cat = vehicle.category?.toLowerCase();
+                    if (cat === "car") totalCar++;
+                    else if (cat === "bike") totalBike++;
+                    else if (cat === "truck") totalTruck++;
+                }
+            } else {
+                // Available slot: we can't know category unless predefined in slot
+                const cat = slot.category?.toLowerCase();
+                if (cat === "car") { totalCar++; }
+                else if (cat === "bike") { totalBike++; }
+                else if (cat === "truck") { totalTruck++; }
             }
-        });
-
-        const totalAvailable = car + bike + truck;
+        }
 
         res.status(200).json({
-            level: level.levelName,
-            availableSpaces: totalAvailable,
-            car,
-            bike,
-            truck
+            levelNo: level.levelNo,
+            totalSlots,
+            availableSlots,
+            car: totalCar,
+            bike: totalBike,
+            truck: totalTruck
         });
 
     } catch (error) {
-        console.error("Error in getLevelSlotSummaryById:", error);
         return res.status(500).json({ message: error.message });
     }
 };
@@ -89,61 +54,49 @@ export const getLevelSlotSummaryById = async (req, res) => {
 // Get Parking Overview
 export const getParkingOverview = async (req, res) => {
     try {
-        const totalSlotsPerLevel = {
-            "Level 1": 600,
-            "Level 2": 600,
-            "Level 3": 600,
-            "Level 4": 600,
-            "Level 5": 600
-        };
-
-        // Aggregate booked vehicle count by level
-        const bookedVehicles = await vehicleModel.aggregate([
+        // 1. Get all levels with their slots from the database
+        const levels = await levelModel.aggregate([
             {
-                $match: {
-                    slotNo: { $regex: /^Level \d+/i },
-                    category: { $in: ["Car", "Truck", "Bike"] }
-                }
-            },
-            {
-                $addFields: {
-                    level: {
-                        $regexFind: {
-                            input: "$slotNo",
-                            regex: /(Level \d+)/i
+                $project: {
+                    levelNo: 1,
+                    totalSlots: { $size: "$slots" },
+                    usedSlots: {
+                        $size: {
+                            $filter: {
+                                input: "$slots",
+                                as: "slot",
+                                cond: { $eq: ["$$slot.isAvailable", false] }
+                            }
                         }
                     }
                 }
             },
             {
-                $match: {
-                    "level.match": { $ne: null }
+                $addFields: {
+                    levelName: { $concat: ["Level ", { $toString: "$levelNo" }] },
+                    availableSlots: { $subtract: ["$totalSlots", "$usedSlots"] },
+                    percentageUsed: {
+                        $cond: [
+                            { $eq: ["$totalSlots", 0] },
+                            0,
+                            { $round: [{ $multiply: [{ $divide: ["$usedSlots", "$totalSlots"] }, 100] }, 0] }
+                        ]
+                    }
                 }
             },
             {
-                $group: {
-                    _id: "$level.match",
-                    count: { $sum: 1 }
+                $project: {
+                    _id: 0,
+                    level: "$levelName",
+                    totalSlots: 1,
+                    usedSlots: 1,
+                    availableSlots: 1,
+                    percentageUsed: { $concat: [{ $toString: "$percentageUsed" }, "%"] }
                 }
             }
         ]);
 
-        // Build result map
-        const result = Object.entries(totalSlotsPerLevel).map(([level, total]) => {
-            const match = bookedVehicles.find(bv => bv._id === level);
-            const used = match ? match.count : 0;
-            const percentageUsed = Math.round((used / total) * 100);
-
-            return {
-                level,
-                totalSlots: total,
-                usedSlots: used,
-                availableSlots: total - used,
-                percentageUsed: percentageUsed + "%"
-            };
-        });
-
-        res.status(200).json(result);
+        res.status(200).json(levels);
     } catch (error) {
         console.error("Error in getParkingOverview:", error);
         res.status(500).json({ message: "Internal Server Error" });
@@ -153,22 +106,24 @@ export const getParkingOverview = async (req, res) => {
 //getVehicleVolume
 export const getParkingVolumeOverview = async (req, res) => {
     try {
-        const totalSlotsPerLevel = {
-            "Level 1": 600,
-            "Level 2": 600,
-            "Level 3": 600,
-            "Level 4": 600,
-            "Level 5": 600
-        };
+        const maxCapacity = (await levelModel.aggregate([
+            { $project: { slotCount: { $size: "$slots" } } },
+            { $group: { _id: null, total: { $sum: "$slotCount" } } }
+        ]))[0]?.total || 0;
 
-        const maxCapacity = Object.values(totalSlotsPerLevel).reduce((acc, val) => acc + val, 0);
-        const currentVolume = await vehicleModel.countDocuments();
+        // 2. Get current volume (vehicles in occupied slots)
+        const currentVolume = await levelModel.aggregate([
+            { $unwind: "$slots" },
+            { $match: { "slots.isAvailable": false } },
+            { $count: "occupiedSlots" }
+        ]);
 
         res.status(200).json({
-            currentVolume,
+            currentVolume: currentVolume[0]?.occupiedSlots || 0,
             maxCapacity
         });
     } catch (error) {
+        console.error("Error in getParkingVolumeOverview:", error);
         return ThrowError(res, 500, error.message);
     }
 };
