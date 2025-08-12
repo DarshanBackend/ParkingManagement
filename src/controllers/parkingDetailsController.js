@@ -1,6 +1,7 @@
 import parkingDetailsModel from "../models/parkingDetailsModel.js";
 import vehicalModel from "../models/vehicleModel.js";
 import moment from "moment";
+import mongoose from "mongoose";
 import levelModel from "../models/levelModel.js";
 
 //addParkingDetails
@@ -117,43 +118,130 @@ export const addParkingDetail = async (req, res) => {
 
 //updateParkingDetails
 export const updateParkingDetail = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { id } = req.params;
         const { entryTime, exitTime } = req.body;
 
-        if (!entryTime || !exitTime) {
-            return res.status(400).json({ message: "Both entryTime and exitTime are required." });
-        }
-
-        const today = moment().format("YYYY-MM-DD");
-        const entryDateTime = moment(`${today} ${entryTime}`, "YYYY-MM-DD hh:mm A").toDate();
-        const exitDateTime = moment(`${today} ${exitTime}`, "YYYY-MM-DD hh:mm A").toDate();
-
-        const updated = await parkingDetailsModel.findByIdAndUpdate(
-            id,
-            { entryTime: entryDateTime, exitTime: exitDateTime },
-            { new: true }
-        );
-
-        if (!updated) {
+        // Validate parking record exists
+        const parking = await parkingDetailsModel.findById(id).session(session);
+        if (!parking) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: "Parking detail not found." });
         }
+
+        // Helper to parse date/time strings
+        const parseDate = (dateString) => {
+            if (!dateString) return null;
+            if (moment(dateString, moment.ISO_8601, true).isValid()) {
+                return new Date(dateString);
+            }
+            const formats = [
+                "YYYY-MM-DD HH:mm:ss",
+                "YYYY-MM-DD hh:mm A",
+                "DD-MM-YYYY HH:mm:ss",
+                "MM/DD/YYYY HH:mm:ss",
+                "hh:mm A"
+            ];
+            const parsed = moment(dateString, formats, true);
+            if (!parsed.isValid()) throw new Error(`Invalid date format: ${dateString}`);
+            return parsed.toDate();
+        };
+
+        let entryDateTime, exitDateTime;
+        try {
+            entryDateTime = entryTime ? parseDate(entryTime) : parking.entryTime;
+            exitDateTime = exitTime ? parseDate(exitTime) : parking.exitTime;
+        } catch (err) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ message: err.message });
+        }
+
+        // Validate entryTime <= exitTime if both present
+        if (entryDateTime && exitDateTime && entryDateTime > exitDateTime) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ message: "entryTime cannot be after exitTime." });
+        }
+
+        // Get vehicle & slot info
+        const vehicle = await vehicalModel.findById(parking.vehicleId).session(session);
+        if (!vehicle) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: "Associated vehicle not found." });
+        }
+        const slotId = vehicle.slotId;
+        if (!slotId) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ message: "Vehicle has no assigned slot." });
+        }
+
+        // Determine if exitTime changed states
+        const exitTimeChangedFromNullToValue = !parking.exitTime && exitDateTime;
+        const exitTimeChangedFromValueToNull = parking.exitTime && !exitDateTime;
+
+        if (exitTimeChangedFromNullToValue) {
+            // Vehicle exited → free the slot
+            await levelModel.updateOne(
+                { "slots._id": slotId },
+                {
+                    $set: {
+                        "slots.$.isAvailable": true,
+                        "slots.$.currentBookingId": null
+                    }
+                }
+            ).session(session);
+        } else if (exitTimeChangedFromValueToNull) {
+            // Vehicle re-entered or exit canceled → occupy the slot
+            await levelModel.updateOne(
+                { "slots._id": slotId },
+                {
+                    $set: {
+                        "slots.$.isAvailable": false,
+                        "slots.$.currentBookingId": parking._id
+                    }
+                }
+            ).session(session);
+        }
+        // else no change to exitTime state → don't update slot availability
+
+        // Update parking record with new times and status
+        const status = exitDateTime ? "completed" : "active";
+        const updatedParking = await parkingDetailsModel.findByIdAndUpdate(
+            id,
+            {
+                entryTime: entryDateTime,
+                exitTime: exitDateTime,
+                status
+            },
+            { new: true, session }
+        );
+
+        await session.commitTransaction();
+        session.endSession();
 
         res.status(200).json({
             message: "Parking detail updated successfully.",
             data: {
-                _id: updated._id,
-                vehicleId: updated.vehicleId,
+                _id: updatedParking._id,
+                vehicleId: updatedParking.vehicleId,
                 entryTime: {
-                    date: moment(updated.entryTime).format("DD-MMM-YYYY"),
-                    time: moment(updated.entryTime).format("hh:mm A")
+                    date: moment(updatedParking.entryTime).format("DD-MMM-YYYY"),
+                    time: moment(updatedParking.entryTime).format("hh:mm A")
                 },
-                exitTime: {
-                    date: moment(updated.exitTime).format("DD-MMM-YYYY"),
-                    time: moment(updated.exitTime).format("hh:mm A")
-                },
-                createdAt: updated.createdAt,
-                updatedAt: updated.updatedAt
+                exitTime: updatedParking.exitTime ? {
+                    date: moment(updatedParking.exitTime).format("DD-MMM-YYYY"),
+                    time: moment(updatedParking.exitTime).format("hh:mm A")
+                } : null,
+                status: updatedParking.status,
+                createdAt: updatedParking.createdAt,
+                updatedAt: updatedParking.updatedAt
             }
         });
     } catch (error) {

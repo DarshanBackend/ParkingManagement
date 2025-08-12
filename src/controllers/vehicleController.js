@@ -105,76 +105,124 @@ export const getAllVehicleDetails = async (req, res) => {
 
 // Update Vehicle Details
 export const updateVehicleDetails = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { id } = req.params;
         const { mobile, vehicleNumber, slotId } = req.body;
 
-        // Check if the vehicle ID is valid
+        // Validate vehicle ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ message: "Invalid vehicle ID." });
         }
 
-        // Check if the vehicle exists
-        const existingVehicle = await vehicalModel.findById(id);
+        // Check if vehicle exists
+        const existingVehicle = await vehicalModel.findById(id).session(session);
         if (!existingVehicle) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: "Vehicle not found." });
         }
 
-        // Validate slotId if it is being updated
+        // If slotId is provided, validate and check availability
         if (slotId) {
             if (!mongoose.Types.ObjectId.isValid(slotId)) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(400).json({ message: "Invalid slotId." });
             }
 
-            const levelWithSlot = await Level.findOne({
-                "slots._id": new mongoose.Types.ObjectId(slotId)
-            });
-
+            // Find level containing the slot
+            const levelWithSlot = await Level.findOne({ "slots._id": slotId }).session(session);
             if (!levelWithSlot) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(404).json({ message: "Slot not found in any level." });
             }
 
-            // Check if the slot is already booked by another vehicle
-            const isSlotBooked = await vehicalModel.findOne({
-                slotId: slotId,
-                _id: { $ne: id },
-            });
+            const slot = levelWithSlot.slots.find(s => s._id.equals(slotId));
 
-            if (isSlotBooked) {
+            // If slot is occupied by another vehicle (not this vehicle), return conflict
+            if (!slot.isAvailable && (!slot.currentBookingId || !slot.currentBookingId.equals(id))) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(409).json({ message: "This slot is already booked." });
             }
         }
 
-        // Validate mobile
+        // Validate mobile uniqueness
         if (mobile) {
             const existingMobile = await vehicalModel.findOne({
                 mobile: mobile,
-                _id: { $ne: id },
-            });
+                _id: { $ne: id }
+            }).session(session);
             if (existingMobile) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(409).json({ message: "Mobile number already in use." });
             }
         }
 
-        // Validate vehicle number
+        // Validate vehicleNumber uniqueness
         if (vehicleNumber) {
             const existingVehicleNumber = await vehicalModel.findOne({
                 vehicleNumber: vehicleNumber,
-                _id: { $ne: id },
-            });
+                _id: { $ne: id }
+            }).session(session);
             if (existingVehicleNumber) {
+                await session.abortTransaction();
+                session.endSession();
                 return res.status(409).json({ message: "Vehicle number already exists." });
             }
         }
 
-        // Update vehicle
-        const updatedVehicle = await vehicalModel.findByIdAndUpdate(id, req.body, {
-            new: true,
-        });
+        // If slotId is changing, update old slot to available and new slot to occupied
+        if (slotId && (!existingVehicle.slotId || !existingVehicle.slotId.equals(slotId))) {
+            // 1. Free old slot if exists
+            if (existingVehicle.slotId) {
+                await Level.updateOne(
+                    { "slots._id": existingVehicle.slotId },
+                    {
+                        $set: {
+                            "slots.$.isAvailable": true,
+                            "slots.$.currentBookingId": null
+                        }
+                    }
+                ).session(session);
+            }
+
+            // 2. Occupy new slot
+            const updateResult = await Level.updateOne(
+                { "slots._id": slotId },
+                {
+                    $set: {
+                        "slots.$.isAvailable": false,
+                        "slots.$.currentBookingId": id
+                    }
+                }
+            ).session(session);
+
+            if (updateResult.modifiedCount === 0) {
+                throw new Error("Failed to update new slot status");
+            }
+        }
+
+        // Update vehicle details
+        const updatedVehicle = await vehicalModel.findByIdAndUpdate(
+            id,
+            req.body,
+            { new: true, session }
+        );
+
+        await session.commitTransaction();
+        session.endSession();
 
         return res.status(200).json({
             message: "Vehicle details updated",
-            vehicle: updatedVehicle,
+            vehicle: updatedVehicle
         });
     } catch (error) {
         return ThrowError(res, 500, error.message);
@@ -183,10 +231,44 @@ export const updateVehicleDetails = async (req, res) => {
 
 // Delete Vehicle Details
 export const deleteVehicleDetails = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-        const vehicle = await vehicalModel.findByIdAndDelete(req.params.id);
-        if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
-        res.status(200).json({ message: "Vehicle details deleted" });
+        const { id } = req.params;
+
+        // Find vehicle with session
+        const vehicle = await vehicalModel.findById(id).session(session);
+        if (!vehicle) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: "Vehicle not found" });
+        }
+
+        // Delete vehicle
+        await vehicalModel.findByIdAndDelete(id).session(session);
+
+        // If vehicle had a slot assigned, free the slot
+        if (vehicle.slotId) {
+            const updateResult = await Level.updateOne(
+                { "slots._id": vehicle.slotId },
+                {
+                    $set: {
+                        "slots.$.isAvailable": true,
+                        "slots.$.currentBookingId": null,
+                    }
+                }
+            ).session(session);
+
+            if (updateResult.modifiedCount === 0) {
+                throw new Error("Failed to free the slot");
+            }
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json({ message: "Vehicle details deleted and slot freed" });
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
