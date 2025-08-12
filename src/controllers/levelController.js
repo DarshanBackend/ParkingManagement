@@ -23,7 +23,9 @@ export const addLevelWithSlot = async (req, res) => {
             for (let row = 1; row <= rows; row++) {
                 generatedSlots.push({
                     _id: new mongoose.Types.ObjectId(),
-                    slotNo: `${colLetter}${row}`
+                    slotNo: `${colLetter}${row}`,
+                    isAvailable: true,
+                    currentBookingId: null
                 });
             }
         }
@@ -39,12 +41,7 @@ export const addLevelWithSlot = async (req, res) => {
 
         // Add only unique slots
         const existingSlotNos = level.slots.map(s => s.slotNo);
-        const newUniqueSlots = generatedSlots
-            .filter(slot => !existingSlotNos.includes(slot.slotNo))
-            .map(slot => ({
-                ...slot,
-                _id: new mongoose.Types.ObjectId()
-            }));
+        const newUniqueSlots = generatedSlots.filter(slot => !existingSlotNos.includes(slot.slotNo));
 
         if (newUniqueSlots.length === 0) {
             return sendBadRequestResponse(res, "All generated slots already exist in this level.");

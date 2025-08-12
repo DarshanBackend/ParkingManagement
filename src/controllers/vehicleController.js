@@ -2,51 +2,69 @@ import mongoose from "mongoose";
 import vehicalModel from "../models/vehicleModel.js";
 import Level from "../models/levelModel.js"
 import { ThrowError } from "../utils/Errorutils.js";
+import parkingDetailsModel from "../models/parkingDetailsModel.js";
+import vehicleModel from "../models/vehicleModel.js";
 
 // Add Vehicle Details
 export const addVehicleDetails = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-        const { mobile, vehicleNumber, slotId } = req.body;
+        const { slotId } = req.body;
 
-        if (!mobile || !vehicleNumber || !slotId) {
-            return res.status(400).json({ message: "Mobile, vehicleNumber, and slotId are required." });
-        }
-
-        // Validate slotId
-        if (!mongoose.Types.ObjectId.isValid(slotId)) {
-            return res.status(400).json({ message: "Invalid slotId." });
-        }
-
-        // Find if slot exists in any level
-        const levelWithSlot = await Level.findOne({ "slots._id": slotId });
+        // 1. First check if slot exists at all
+        const levelWithSlot = await Level.findOne({ "slots._id": slotId }).session(session);
         if (!levelWithSlot) {
-            return res.status(404).json({ message: "Slot not found in any level." });
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: "Slot not found." });
         }
 
-        // Check for duplicate mobile
-        const existingMobile = await vehicalModel.findOne({ mobile });
-        if (existingMobile) {
-            return res.status(409).json({ message: "Vehicle with this mobile number already exists." });
+        // 2. Then check if it's available
+        const slot = levelWithSlot.slots.find(s => s._id.equals(slotId));
+        if (!slot.isAvailable) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(409).json({
+                message: "Slot is not available for booking.",
+                details: {
+                    slotId,
+                    currentStatus: slot.isAvailable ? "available" : "occupied",
+                    currentBookingId: slot.currentBookingId || null
+                }
+            });
         }
 
-        // Check for duplicate vehicleNumber
-        const existingVehicleNumber = await vehicalModel.findOne({ vehicleNumber });
-        if (existingVehicleNumber) {
-            return res.status(409).json({ message: "Vehicle number already exists." });
+        // Rest of your vehicle creation logic...
+        const vehicle = new vehicleModel(req.body);
+        await vehicle.save({ session });
+
+        // Update slot status
+        const updated = await Level.updateOne(
+            { "slots._id": slotId },
+            {
+                $set: {
+                    "slots.$.isAvailable": false,
+                    "slots.$.currentBookingId": vehicle._id
+                }
+            }
+        ).session(session);
+
+        if (updated.modifiedCount === 0) {
+            throw new Error("Failed to update slot status");
         }
 
-        // Check if slot is already booked
-        const isSlotBooked = await vehicalModel.findOne({ slotId });
-        if (isSlotBooked) {
-            return res.status(409).json({ message: "This slot is already booked." });
-        }
+        await session.commitTransaction();
+        session.endSession();
 
-        const vehicle = new vehicalModel(req.body);
-        await vehicle.save();
-
-        res.status(201).json({ message: "Vehicle details added", vehicle });
+        res.status(201).json({
+            message: "Vehicle registered and slot booked successfully",
+            vehicle,
+            slotId
+        });
     } catch (error) {
-        return ThrowError(res, 500, error.message);
+        res.status(500).json({ message: error.message });
     }
 };
 
