@@ -1,112 +1,87 @@
+import { ThrowError } from "../utils/Errorutils.js";
 import parkingDetailsModel from "../models/parkingDetailsModel.js";
 import vehicalModel from "../models/vehicleModel.js";
 import moment from "moment";
-import levelModel from "../models/levelModel.js";
 
 //addParkingDetails
 export const addParkingDetail = async (req, res) => {
     try {
         const { vehicleId, entryTime, exitTime } = req.body;
 
-        // 1. Basic validation
-        if (!vehicleId || !entryTime) {  // Made exitTime optional
+        // 🔍 Basic validation
+        if (!vehicleId || !entryTime || !exitTime) {
             return res.status(400).json({
-                message: "vehicleId and entryTime are required",
-                received: { vehicleId, entryTime, exitTime }
+                message: "vehicleId, entryTime, and exitTime are required."
             });
         }
 
-        // 2. Parse dates (handles both ISO strings and custom formats)
-        const parseDate = (dateString) => {
-            if (!dateString) return null;  // Handle optional exitTime
-
-            // Try ISO format first
-            if (moment(dateString, moment.ISO_8601, true).isValid()) {
-                return new Date(dateString);
-            }
-
-            // Try common custom formats
-            const formats = [
-                "YYYY-MM-DD HH:mm:ss",
-                "YYYY-MM-DD hh:mm A",
-                "DD-MM-YYYY HH:mm:ss",
-                "MM/DD/YYYY HH:mm:ss",
-                "hh:mm A"  // Added support for time-only format
-            ];
-
-            const parsed = moment(dateString, formats, true);
-            if (!parsed.isValid()) {
-                throw new Error(`Invalid date format: ${dateString}`);
-            }
-            return parsed.toDate();
-        };
-
-        const entryDateTime = parseDate(entryTime);
-        const exitDateTime = exitTime ? parseDate(exitTime) : null;  // Handle optional exitTime
-
-        // 3. Get vehicle and its assigned slot
+        // 🔍 Ensure vehicle exists
         const vehicle = await vehicalModel.findById(vehicleId);
         if (!vehicle) {
-            return res.status(404).json({ message: "Vehicle not found" });
+            return res.status(404).json({ message: "Vehicle not found." });
         }
 
-        const slotId = vehicle.slotId;
-        if (!slotId) {
-            return res.status(400).json({ message: "Vehicle has no assigned slot" });
-        }
+        // 🕐 Format today's date with entry/exit times
+        const today = moment().format("YYYY-MM-DD");
 
-        // 4. Check if vehicle already parked
-        const existingParking = await parkingDetailsModel.findOne({
-            vehicleId,
-            exitTime: null
-        });
-        if (existingParking) {
+        const entryDateTime = moment(
+            `${today} ${entryTime}`,
+            "YYYY-MM-DD hh:mm A"
+        ).toDate();
+
+        const exitDateTime = moment(
+            `${today} ${exitTime}`,
+            "YYYY-MM-DD hh:mm A"
+        ).toDate();
+
+        // ❗ Validation: Entry must be before exit
+        if (entryDateTime >= exitDateTime) {
             return res.status(400).json({
-                message: "This vehicle is already parked",
-                existingParking
+                message: "Entry time must be before exit time."
             });
         }
 
-        // 5. Check if slot is available
-        const slot = await levelModel.findOne({
-            "slots._id": slotId,
-            "slots.isAvailable": true
+        // 🔄 Check for existing entry (loose duplicate check)
+        const exists = await parkingDetailsModel.findOne({
+            vehicleId,
+            entryTime: entryDateTime
         });
-        if (!slot) {
-            return res.status(400).json({
-                message: "Assigned slot is not available",
-                slotId
+
+        if (exists) {
+            return res.status(409).json({
+                message: "Duplicate entry. Parking detail already exists for this time."
             });
         }
 
-        // 6. Create parking record
-        const parking = await parkingDetailsModel.create({
+        // ✅ Save to DB
+        const newDetail = new parkingDetailsModel({
             vehicleId,
-            slotId,
             entryTime: entryDateTime,
-            exitTime: exitDateTime,
-            status: exitDateTime ? "completed" : "active"  // Auto-set status
+            exitTime: exitDateTime
         });
 
-        // 7. Update slot status
-        await levelModel.updateOne(
-            { "slots._id": slotId },
-            {
-                $set: {
-                    "slots.$.isAvailable": false,
-                    "slots.$.currentBookingId": parking._id
-                }
-            }
-        );
+        await newDetail.save();
 
+        // ⏱️ Calculate parking duration
+        const duration = moment(exitDateTime).diff(moment(entryDateTime), 'minutes');
+
+        // 📦 Send response
         res.status(201).json({
-            message: "Parking added successfully",
+            message: "Parking detail added successfully.",
             data: {
-                parkingId: parking._id,
-                vehicleId,
-                slotId,
-                entryTime: entryDateTime.toISOString(),
-                exitTime: exitDateTime ? exitDateTime.toISOString() : null
+                _id: newDetail._id,
+                vehicleId: newDetail.vehicleId,
+                entryTime: {
+                    date: moment(entryDateTime).format("DD-MMM-YYYY"),
+                    time: moment(entryDateTime).format("hh:mm A")
+                },
+                exitTime: {
+                    date: moment(exitDateTime).format("DD-MMM-YYYY"),
+                    time: moment(exitDateTime).format("hh:mm A")
+                },
+                duration: `${duration} Mins`,
+                createdAt: newDetail.createdAt,
+                updatedAt: newDetail.updatedAt
             }
         });
 
@@ -165,36 +140,13 @@ export const updateParkingDetail = async (req, res) => {
 export const deleteParkingDetail = async (req, res) => {
     try {
         const { id } = req.params;
+        const deleted = await parkingDetailsModel.findByIdAndDelete(id);
 
-        // 1. Find and validate parking detail
-        const parkingDetail = await parkingDetailsModel.findById(id);
-        if (!parkingDetail) {
+        if (!deleted) {
             return res.status(404).json({ message: "Parking detail not found." });
         }
 
-        // 2. Free up the slot
-        const slotUpdate = await levelModel.updateOne(
-            { "slots._id": parkingDetail.slotId },
-            {
-                $set: {
-                    "slots.$.isAvailable": true,
-                    "slots.$.currentBookingId": null
-                }
-            }
-        );
-
-        if (slotUpdate.modifiedCount === 0) {
-            return res.status(400).json({ message: "Failed to free parking slot." });
-        }
-
-        // 3. Delete parking record
-        await parkingDetailsModel.findByIdAndDelete(id);
-
-        res.status(200).json({
-            message: "Parking exit processed successfully",
-            freedSlotId: parkingDetail.slotId
-        });
-
+        res.status(200).json({ message: "Parking detail deleted successfully." });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
