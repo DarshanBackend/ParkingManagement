@@ -80,9 +80,10 @@ export const addParkingDetail = async (req, res) => {
             });
         }
 
-        // 6. Create parking record
+        // 6. Create parking record (include levelId so reports can resolve slotNo)
         const parking = await parkingDetailsModel.create({
             vehicleId,
+            levelId: slot._id,
             slotId,
             entryTime: entryDateTime,
             exitTime: exitDateTime,
@@ -410,32 +411,46 @@ export const getCollectionDetails = async (req, res) => {
 //getParkingReport
 export const getParkingReport = async (req, res) => {
     try {
-        const report = await parkingDetailsModel.find()
+        const reports = await parkingDetailsModel.find()
             .populate("vehicleId")
-            .sort({ entryTime: 1 });
+            .populate("levelId");
 
-        const formatted = report.map((item, index) => {
+        const formatted = reports.map((item, index) => {
             const vehicle = item.vehicleId;
+
+            // ✅ Check slot properly using stored slotId
+            let slotNo = "N/A";
+            if (item.levelId && item.slotId) {
+                const slot = item.levelId.slots.id(item.slotId);
+                if (slot) {
+                    const levelLabel = typeof item.levelId.levelNo !== "undefined" && item.levelId.levelNo !== null
+                        ? `Level ${item.levelId.levelNo}`
+                        : "Level";
+                    slotNo = `${levelLabel} - ${slot.slotNo}`;
+                }
+            }
+
             const entry = moment(item.entryTime);
-            const exit = moment(item.exitTime);
+            const exit = item.exitTime ? moment(item.exitTime) : moment();
             const durationMins = exit.diff(entry, "minutes");
 
             const hours = Math.floor(durationMins / 60);
             const mins = durationMins % 60;
+
             let totalTime = "";
             if (hours > 0) totalTime += `${hours} hr${hours > 1 ? "s" : ""}`;
             if (mins > 0) totalTime += (totalTime ? " " : "") + `${mins} Min${mins > 1 ? "s" : ""}`;
             if (!totalTime) totalTime = "0 Min";
 
             return {
-                no: (index + 1).toString().padStart(2, '0'),
-                date: moment(item.entryTime).format("DD MMMM YYYY"),
-                vehicleNumber: vehicle.vehicleNumber,
-                vehicleType: vehicle.category,
-                slotNo: vehicle.slotNo,
+                no: (index + 1).toString().padStart(2, "0"),
+                date: entry.format("DD MMMM YYYY"),
+                vehicleNumber: vehicle?.vehicleNumber || "N/A",
+                vehicleType: vehicle?.category || "N/A",
+                slotNo,   // ✅ now resolved properly
                 inTime: entry.format("hh:mm A"),
-                outTime: exit.format("hh:mm A"),
-                totalTime: totalTime
+                outTime: item.exitTime ? exit.format("hh:mm A") : "Active",
+                totalTime
             };
         });
 
