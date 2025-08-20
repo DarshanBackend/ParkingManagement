@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { ThrowError } from "../utils/Errorutils.js";
 import { sendSuccessResponse, sendBadRequestResponse, sendNotFoundResponse } from "../utils/ResponseUtils.js"
 import Level from "../models/levelModel.js";
+import Vehicle from "../models/vehicleModel.js";
+import ParkingDetail from "../models/parkingDetailsModel.js";
 
 export const addLevelWithSlot = async (req, res) => {
     try {
@@ -216,5 +218,53 @@ export const getAllSlots = async (req, res) => {
         return sendSuccessResponse(res, "Slots fetched", { slots });
     } catch (err) {
         return ThrowError(res, 500, err.message);
+    }
+};
+
+export const editSlot = async (req, res) => {
+    try {
+        const { levelId, slotId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(levelId)) {
+            return sendBadRequestResponse(res, "Invalid level ID...");
+        }
+        if (!mongoose.Types.ObjectId.isValid(slotId)) {
+            return sendBadRequestResponse(res, "Invalid slot ID...");
+        }
+
+        const level = await Level.findById(levelId);
+        if (!level) {
+            return sendNotFoundResponse(res, "Level not found...");
+        }
+
+        // find slot inside level.slots array
+        const slot = level.slots.id(slotId);
+        if (!slot) {
+            return sendNotFoundResponse(res, "Slot not found...");
+        }
+
+        // check if slot already free
+        if (slot.isAvailable === true && slot.currentBookingId === null) {
+            return sendBadRequestResponse(res, "Slot is already empty!");
+        }
+
+        // reset slot
+        slot.isAvailable = true;
+        slot.currentBookingId = null;
+
+        await level.save();
+
+        // Remove related records from Vehicle & ParkingDetail
+        await Vehicle.deleteMany({ slotId: slotId });
+        await ParkingDetail.deleteMany({ slotId: slotId });
+
+        return sendSuccessResponse(
+            res,
+            "Slot reset successfully & related details removed!",
+            { slot }
+        );
+
+    } catch (error) {
+        return ThrowError(res, 500, error.message);
     }
 };

@@ -36,24 +36,24 @@ export const addVehicleDetails = async (req, res) => {
             });
         }
 
-        // Rest of your vehicle creation logic...
+        // // Rest of your vehicle creation logic...
         const vehicle = new vehicleModel(req.body);
         await vehicle.save({ session });
 
-        // Update slot status
-        const updated = await Level.updateOne(
-            { "slots._id": slotId },
-            {
-                $set: {
-                    "slots.$.isAvailable": false,
-                    "slots.$.currentBookingId": vehicle._id
-                }
-            }
-        ).session(session);
+        // // Update slot status
+        // const updated = await Level.updateOne(
+        //     { "slots._id": slotId },
+        //     {
+        //         $set: {
+        //             "slots.$.isAvailable": false,
+        //             "slots.$.currentBookingId": vehicle._id
+        //         }
+        //     }
+        // ).session(session);
 
-        if (updated.modifiedCount === 0) {
-            throw new Error("Failed to update slot status");
-        }
+        // if (updated.modifiedCount === 0) {
+        //     throw new Error("Failed to update slot status");
+        // }
 
         await session.commitTransaction();
         session.endSession();
