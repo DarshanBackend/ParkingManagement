@@ -452,6 +452,102 @@ export const getParkingReport = async (req, res) => {
     }
 };
 
+export const searchVehicleReport = async (req, res) => {
+    try {
+        const { vehicleNumber } = req.query;
+
+        if (!vehicleNumber) {
+            return res.status(400).json({
+                success: false,
+                message: "Vehicle number is required"
+            });
+        }
+
+        const reports = await parkingDetailsModel.find()
+            .populate({
+                path: "vehicleId",
+                match: {
+                    vehicleNumber: {
+                        $regex: vehicleNumber,
+                        $options: 'i'
+                    }
+                }
+            })
+            .populate("levelId")
+            .sort({ entryTime: -1 });
+
+        // Filter out null vehicles (no match)
+        const filteredReports = reports.filter(item => item.vehicleId !== null);
+
+        if (filteredReports.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No records found for vehicle number: ${vehicleNumber}`
+            });
+        }
+
+        const formatted = filteredReports.map((item, index) => {
+            const vehicle = item.vehicleId;
+
+            // Format slot information
+            let slotNo = "N/A";
+            if (item.levelId && item.slotId) {
+                try {
+                    const slot = item.levelId.slots.id(item.slotId);
+                    if (slot) {
+                        const levelLabel = item.levelId.levelNo !== undefined && item.levelId.levelNo !== null
+                            ? `Level ${item.levelId.levelNo}`
+                            : item.levelId.name || "Level";
+                        slotNo = `${levelLabel} - ${slot.slotNo}`;
+                    }
+                } catch (err) {
+                    console.log("Slot lookup error:", err.message);
+                }
+            }
+
+            const entry = moment(item.entryTime);
+            const exit = item.exitTime ? moment(item.exitTime) : moment();
+            const durationMins = exit.diff(entry, "minutes");
+
+            const hours = Math.floor(durationMins / 60);
+            const mins = durationMins % 60;
+
+            let totalTime = "";
+            if (hours > 0) totalTime += `${hours} hr${hours > 1 ? "s" : ""}`;
+            if (mins > 0) totalTime += (totalTime ? " " : "") + `${mins} Min${mins > 1 ? "s" : ""}`;
+            if (!totalTime) totalTime = "0 Min";
+
+            return {
+                no: (index + 1).toString().padStart(2, "0"),
+                date: entry.format("DD MMMM YYYY"),
+                vehicleNumber: vehicle?.vehicleNumber || "N/A",
+                vehicleType: vehicle?.category || "N/A",
+                slotNo,
+                inTime: entry.format("hh:mm A"),
+                outTime: item.exitTime ? exit.format("hh:mm A") : "Active",
+                totalTime,
+                transactionId: item._id,
+                amount: vehicle?.parkingCharges || 0
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `Found ${formatted.length} record(s) for vehicle: ${vehicleNumber}`,
+            searchQuery: vehicleNumber,
+            data: formatted
+        });
+
+    } catch (error) {
+        console.error("searchVehicleReport error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
+    }
+};
+
 //getParkingHistory
 export const getParkingHistory = async (req, res) => {
     try {

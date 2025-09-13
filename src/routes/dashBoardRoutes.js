@@ -1,11 +1,12 @@
 import express from "express"
-import { getBookingSummary, getCurrentRevenue, getHourlyRevenueToday, getLevelSlotSummaryById, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
+import { getBookingSummary, getCurrentRevenue, getHourlyRevenueToday, getLevelSlotSummaryById, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getTotalVehicleFixed, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
 import { verifyToken } from "../middlewares/auth.js"
 
 const dashBoardRoutes = express.Router()
 
 //getCheckinSummary Routes
 dashBoardRoutes.get("/getLevelSlotSummaryById/:levelId", verifyToken, getLevelSlotSummaryById)
+dashBoardRoutes.get("/getTotalVehicleFixed", verifyToken, getTotalVehicleFixed)
 dashBoardRoutes.get("/getParkingOverview", verifyToken, getParkingOverview)
 dashBoardRoutes.get("/getParkingVolumeOverview", verifyToken, getParkingVolumeOverview)
 dashBoardRoutes.get("/getWeeklyRevenueAnalytics", verifyToken, getWeeklyRevenueAnalytics)

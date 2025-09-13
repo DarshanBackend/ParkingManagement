@@ -51,6 +51,64 @@ export const getLevelSlotSummaryById = async (req, res) => {
     }
 };
 
+export const getTotalVehicleFixed = async (req, res) => {
+    try {
+        const { type } = req.query;
+        let matchCondition = type === "checkOut" ? { exitTime: { $ne: null } } : { exitTime: null };
+
+        // Try multiple possible collection names
+        const possibleCollectionNames = ["vehicles", "vehicle", "Vehicle", "Vehicles"];
+        let totals = [];
+
+        for (const collectionName of possibleCollectionNames) {
+            try {
+                totals = await parkingDetailModel.aggregate([
+                    { $match: matchCondition },
+                    {
+                        $lookup: {
+                            from: collectionName,
+                            localField: "vehicleId",
+                            foreignField: "_id",
+                            as: "vehicle"
+                        }
+                    },
+                    { $unwind: { path: "$vehicle", preserveNullAndEmptyArrays: true } },
+                    {
+                        $group: {
+                            _id: "$vehicle.category",
+                            total: { $sum: 1 }
+                        }
+                    }
+                ]);
+
+                if (totals.some(item => item._id !== null)) {
+                    console.log(`Found data using collection name: ${collectionName}`);
+                    break;
+                }
+            } catch (err) {
+                continue;
+            }
+        }
+
+        const response = { Car: 0, Truck: 0, Bike: 0 };
+        totals.forEach(item => {
+            if (item._id) response[item._id] = item.total;
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `${type || 'checkIn'} vehicles fetched successfully`,
+            result: response
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
+    }
+}
+
 // Get Parking Overview
 export const getParkingOverview = async (req, res) => {
     try {

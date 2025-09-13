@@ -1,5 +1,5 @@
 import express from "express"
-import { addParkingDetail, deleteParkingDetail, getCollectionDetails, getParkingDetails, getParkingHistory, getParkingReport, updateParkingDetail } from "../controllers/parkingDetailsController.js"
+import { addParkingDetail, deleteParkingDetail, getCollectionDetails, getParkingDetails, getParkingHistory, getParkingReport, searchVehicleReport, updateParkingDetail } from "../controllers/parkingDetailsController.js"
 import { verifyToken, isUser } from "../middlewares/auth.js"
 
 
@@ -14,6 +14,7 @@ parkingRoutes.get("/getCollectionDetails", verifyToken, isUser, getCollectionDet
 
 
 parkingRoutes.get("/getParkingReport", verifyToken, isUser, getParkingReport)
+parkingRoutes.get("/searchVehicleReport", verifyToken, isUser, searchVehicleReport)
 parkingRoutes.get("/getParkingHistory", verifyToken, isUser, getParkingHistory)
 
 
