@@ -1,5 +1,5 @@
 import express from "express"
-import { getBookingSummary, getCurrentRevenue, getHourlyRevenueToday, getLevelSlotSummaryById, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getTotalVehicleFixed, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
+import { getBookingSummary, getCurrentRevenue, getHourlyRevenueToday, getLevelSlotSummaryById, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getTotalVehicleFixed, getTransactionsByDate, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
 import { verifyToken } from "../middlewares/auth.js"
 
 const dashBoardRoutes = express.Router()
@@ -20,5 +20,6 @@ dashBoardRoutes.get("/getCurrentRevenue", verifyToken, getCurrentRevenue)
 dashBoardRoutes.get("/getTotalRevenue", verifyToken, getTotalRevenue)
 dashBoardRoutes.get("/getHourlyRevenueToday", verifyToken, getHourlyRevenueToday)
 dashBoardRoutes.get("/getRecentTransactions", verifyToken, getRecentTransactions)
+dashBoardRoutes.get("/getTransactionsByDate", verifyToken, getTransactionsByDate)
 
 export default dashBoardRoutes

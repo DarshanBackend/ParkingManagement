@@ -585,3 +585,41 @@ export const getRecentTransactions = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
+
+//getTransactionByDate
+export const getTransactionsByDate = async (req, res) => {
+    try {
+        let { date } = req.query;
+
+        if (!date) {
+            return res.status(400).json({ success: false, message: "Date is required" });
+        }
+
+        const start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(date);
+        end.setHours(23, 59, 59, 999);
+
+        // Transactions fetch karo
+        const transactions = await parkingDetailModel.find({
+            createdAt: { $gte: start, $lte: end }
+        }).populate("vehicleId");
+
+        // Total charges calculate
+        const totalTransaction = transactions.reduce((sum, txn) => {
+            return sum + (txn.vehicleId?.parkingCharges || 0);
+        }, 0);
+
+        res.status(200).json({
+            success: true,
+            date,
+            totalTransaction,
+            totalCount: transactions.length,
+        });
+
+    } catch (error) {
+        console.error("getTransactionsByDate error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
