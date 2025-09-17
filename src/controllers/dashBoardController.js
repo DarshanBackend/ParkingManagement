@@ -553,7 +553,6 @@ export const getRecentTransactions = async (req, res) => {
 
         const transactions = await parkingDetailModel.find()
             .sort({ createdAt: -1 })
-            .limit(5)
             .populate('vehicleId');
 
         const result = transactions.map(detail => {
