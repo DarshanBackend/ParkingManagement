@@ -7,17 +7,15 @@ import levelModel from "../models/levelModel.js";
 //addParkingDetails
 export const addParkingDetail = async (req, res) => {
     try {
-        const { vehicleId, entryTime, exitTime } = req.body;
+        const { vehicleId, exitTime } = req.body;
 
-        // 1. Basic validation
-        if (!vehicleId || !entryTime) {
+        if (!vehicleId) {
             return res.status(400).json({
-                message: "vehicleId and entryTime are required",
-                received: { vehicleId, entryTime, exitTime }
+                message: "vehicleId is required",
+                received: { vehicleId, exitTime }
             });
         }
 
-        // 2. Parse dates
         const parseDate = (dateString) => {
             if (!dateString) return null;
             if (moment(dateString, moment.ISO_8601, true).isValid()) {
@@ -37,10 +35,10 @@ export const addParkingDetail = async (req, res) => {
             return parsed.toDate();
         };
 
-        const entryDateTime = parseDate(entryTime);
+        const entryDateTime = new Date();
+
         const exitDateTime = exitTime ? parseDate(exitTime) : null;
 
-        // 3. Get vehicle and its assigned slot
         const vehicle = await vehicalModel.findById(vehicleId);
         if (!vehicle) {
             return res.status(404).json({ message: "Vehicle not found" });
@@ -51,7 +49,6 @@ export const addParkingDetail = async (req, res) => {
             return res.status(400).json({ message: "Vehicle has no assigned slot" });
         }
 
-        // 🚫 4. Check if vehicle already exists in parking model (any record)
         const duplicateParking = await parkingDetailsModel.findOne({ vehicleId });
         if (duplicateParking) {
             return res.status(400).json({
@@ -60,7 +57,6 @@ export const addParkingDetail = async (req, res) => {
             });
         }
 
-        // 5. Check if slot is available
         const slot = await levelModel.findOne({
             "slots._id": slotId,
             "slots.isAvailable": true
@@ -72,7 +68,6 @@ export const addParkingDetail = async (req, res) => {
             });
         }
 
-        // 6. Create parking record
         const parking = await parkingDetailsModel.create({
             vehicleId,
             levelId: slot._id,
@@ -82,7 +77,6 @@ export const addParkingDetail = async (req, res) => {
             status: exitDateTime ? "completed" : "active"
         });
 
-        // 7. Update slot status
         await levelModel.updateOne(
             { "slots._id": slotId },
             {
@@ -116,9 +110,7 @@ export const updateParkingDetail = async (req, res) => {
 
     try {
         const { id } = req.params;
-        const { entryTime, exitTime } = req.body;
 
-        // Validate parking record exists
         const parking = await parkingDetailsModel.findById(id).session(session);
         if (!parking) {
             await session.abortTransaction();
@@ -126,42 +118,8 @@ export const updateParkingDetail = async (req, res) => {
             return res.status(404).json({ message: "Parking detail not found." });
         }
 
-        // Helper to parse date/time strings
-        const parseDate = (dateString) => {
-            if (!dateString) return null;
-            if (moment(dateString, moment.ISO_8601, true).isValid()) {
-                return new Date(dateString);
-            }
-            const formats = [
-                "YYYY-MM-DD HH:mm:ss",
-                "YYYY-MM-DD hh:mm A",
-                "DD-MM-YYYY HH:mm:ss",
-                "MM/DD/YYYY HH:mm:ss",
-                "hh:mm A"
-            ];
-            const parsed = moment(dateString, formats, true);
-            if (!parsed.isValid()) throw new Error(`Invalid date format: ${dateString}`);
-            return parsed.toDate();
-        };
+        const exitDateTime = new Date();
 
-        let entryDateTime, exitDateTime;
-        try {
-            entryDateTime = entryTime ? parseDate(entryTime) : parking.entryTime;
-            exitDateTime = exitTime ? parseDate(exitTime) : parking.exitTime;
-        } catch (err) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(400).json({ message: err.message });
-        }
-
-        // Validate entryTime <= exitTime if both present
-        if (entryDateTime && exitDateTime && entryDateTime > exitDateTime) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(400).json({ message: "entryTime cannot be after exitTime." });
-        }
-
-        // Get vehicle & slot info
         const vehicle = await vehicalModel.findById(parking.vehicleId).session(session);
         if (!vehicle) {
             await session.abortTransaction();
@@ -175,43 +133,21 @@ export const updateParkingDetail = async (req, res) => {
             return res.status(400).json({ message: "Vehicle has no assigned slot." });
         }
 
-        // Determine if exitTime changed states
-        const exitTimeChangedFromNullToValue = !parking.exitTime && exitDateTime;
-        const exitTimeChangedFromValueToNull = parking.exitTime && !exitDateTime;
-
-        if (exitTimeChangedFromNullToValue) {
-            // Vehicle exited → free the slot
-            await levelModel.updateOne(
-                { "slots._id": slotId },
-                {
-                    $set: {
-                        "slots.$.isAvailable": true,
-                        "slots.$.currentBookingId": null
-                    }
+        await levelModel.updateOne(
+            { "slots._id": slotId },
+            {
+                $set: {
+                    "slots.$.isAvailable": true,
+                    "slots.$.currentBookingId": null
                 }
-            ).session(session);
-        } else if (exitTimeChangedFromValueToNull) {
-            // Vehicle re-entered or exit canceled → occupy the slot
-            await levelModel.updateOne(
-                { "slots._id": slotId },
-                {
-                    $set: {
-                        "slots.$.isAvailable": false,
-                        "slots.$.currentBookingId": parking._id
-                    }
-                }
-            ).session(session);
-        }
-        // else no change to exitTime state → don't update slot availability
+            }
+        ).session(session);
 
-        // Update parking record with new times and status
-        const status = exitDateTime ? "completed" : "active";
         const updatedParking = await parkingDetailsModel.findByIdAndUpdate(
             id,
             {
-                entryTime: entryDateTime,
                 exitTime: exitDateTime,
-                status
+                status: "completed"
             },
             { new: true, session }
         );
@@ -220,7 +156,7 @@ export const updateParkingDetail = async (req, res) => {
         session.endSession();
 
         res.status(200).json({
-            message: "Parking detail updated successfully.",
+            message: "Parking detail updated successfully (vehicle exited).",
             data: {
                 _id: updatedParking._id,
                 vehicleId: updatedParking.vehicleId,
@@ -228,16 +164,18 @@ export const updateParkingDetail = async (req, res) => {
                     date: moment(updatedParking.entryTime).format("DD-MMM-YYYY"),
                     time: moment(updatedParking.entryTime).format("hh:mm A")
                 },
-                exitTime: updatedParking.exitTime ? {
+                exitTime: {
                     date: moment(updatedParking.exitTime).format("DD-MMM-YYYY"),
                     time: moment(updatedParking.exitTime).format("hh:mm A")
-                } : null,
+                },
                 status: updatedParking.status,
                 createdAt: updatedParking.createdAt,
                 updatedAt: updatedParking.updatedAt
             }
         });
     } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).json({ message: error.message });
     }
 };
@@ -571,4 +509,4 @@ export const getParkingHistory = async (req, res) => {
     } catch (err) {
         res.status(500).json({ message: "Server Error", error: err.message });
     }
-};
+};  

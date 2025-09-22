@@ -14,8 +14,8 @@ employeeRoutes.delete("/deleteEmployee/:id", deleteEmployee)
 
 employeeRoutes.post("/loginEmployee", loginEmployee)
 employeeRoutes.post("/forgotEmployeePassword", forgotEmployeePassword)
-employeeRoutes.post("/VerifyEmail", verifyToken, VerifyEmail)
-employeeRoutes.post("/resetPassword", verifyToken, resetPassword)
+employeeRoutes.post("/VerifyEmail", VerifyEmail)
+employeeRoutes.post("/resetPassword", resetPassword)
 employeeRoutes.post("/changeEmployeePassword/:id", verifyToken, changeEmployeePassword)
 
 export default employeeRoutes
