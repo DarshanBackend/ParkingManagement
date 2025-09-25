@@ -222,49 +222,99 @@ export const getAllSlots = async (req, res) => {
 };
 
 export const editSlot = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { levelId, slotId } = req.params;
 
         if (!mongoose.Types.ObjectId.isValid(levelId)) {
+            await session.abortTransaction();
+            session.endSession();
             return sendBadRequestResponse(res, "Invalid level ID...");
         }
         if (!mongoose.Types.ObjectId.isValid(slotId)) {
+            await session.abortTransaction();
+            session.endSession();
             return sendBadRequestResponse(res, "Invalid slot ID...");
         }
 
-        const level = await Level.findById(levelId);
+        const level = await Level.findById(levelId).session(session);
         if (!level) {
+            await session.abortTransaction();
+            session.endSession();
             return sendNotFoundResponse(res, "Level not found...");
         }
 
-        // find slot inside level.slots array
+        // Find slot inside level.slots array
         const slot = level.slots.id(slotId);
         if (!slot) {
+            await session.abortTransaction();
+            session.endSession();
             return sendNotFoundResponse(res, "Slot not found...");
         }
 
-        // check if slot already free
+        // Check if slot already free
         if (slot.isAvailable === true && slot.currentBookingId === null) {
+            await session.abortTransaction();
+            session.endSession();
             return sendBadRequestResponse(res, "Slot is already empty!");
         }
 
-        // reset slot
+        // ✅ Find active parking record for this slot
+        const activeParking = await ParkingDetail.findOne({
+            slotId: slotId,
+            status: "active"
+        }).session(session);
+
+        let updatedParking = null;
+
+        // ✅ If active parking exists, update it (exitTime સેટ કરો)
+        if (activeParking) {
+            const exitDateTime = new Date();
+
+            updatedParking = await ParkingDetail.findByIdAndUpdate(
+                activeParking._id,
+                {
+                    exitTime: exitDateTime,
+                    status: "completed"
+                },
+                { new: true, session }
+            );
+        }
+
+        // ✅ Reset slot availability (માત્ર slot free કરો)
         slot.isAvailable = true;
         slot.currentBookingId = null;
+        await level.save({ session });
 
-        await level.save();
+        // ❌ NO DELETE OPERATIONS - data રહેશે
 
-        // Remove related records from Vehicle & ParkingDetail
-        await Vehicle.deleteMany({ slotId: slotId });
-        await ParkingDetail.deleteMany({ slotId: slotId });
+        await session.commitTransaction();
+        session.endSession();
 
         return sendSuccessResponse(
             res,
-            "Slot reset successfully & related details removed!",
-            { slot }
+            "Slot reset successfully! Parking record updated.",
+            {
+                slot: {
+                    _id: slot._id,
+                    isAvailable: slot.isAvailable,
+                    currentBookingId: slot.currentBookingId
+                },
+                parkingUpdated: updatedParking ? {
+                    _id: updatedParking._id,
+                    vehicleId: updatedParking.vehicleId,
+                    entryTime: updatedParking.entryTime,
+                    exitTime: updatedParking.exitTime,
+                    status: updatedParking.status
+                } : "No active parking found"
+            }
         );
 
     } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         return ThrowError(res, 500, error.message);
     }
 };
