@@ -246,7 +246,6 @@ export const editSlot = async (req, res) => {
             return sendNotFoundResponse(res, "Level not found...");
         }
 
-        // Find slot inside level.slots array
         const slot = level.slots.id(slotId);
         if (!slot) {
             await session.abortTransaction();
@@ -254,14 +253,12 @@ export const editSlot = async (req, res) => {
             return sendNotFoundResponse(res, "Slot not found...");
         }
 
-        // Check if slot already free
         if (slot.isAvailable === true && slot.currentBookingId === null) {
             await session.abortTransaction();
             session.endSession();
             return sendBadRequestResponse(res, "Slot is already empty!");
         }
 
-        // ✅ Find active parking record for this slot
         const activeParking = await ParkingDetail.findOne({
             slotId: slotId,
             status: "active"
@@ -269,7 +266,6 @@ export const editSlot = async (req, res) => {
 
         let updatedParking = null;
 
-        // ✅ If active parking exists, update it (exitTime સેટ કરો)
         if (activeParking) {
             const exitDateTime = new Date();
 
@@ -283,12 +279,10 @@ export const editSlot = async (req, res) => {
             );
         }
 
-        // ✅ Reset slot availability (માત્ર slot free કરો)
         slot.isAvailable = true;
         slot.currentBookingId = null;
         await level.save({ session });
 
-        // ❌ NO DELETE OPERATIONS - data રહેશે
 
         await session.commitTransaction();
         session.endSession();
