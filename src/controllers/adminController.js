@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import AdminServices from "../services/adminServices.js";
 import fs from 'fs';
 import path from 'path';
+import employeeModel from "../models/employeeModel.js";
 
 const adminServices = new AdminServices();
 
@@ -180,7 +181,7 @@ export const forgotPassword = async (req, res) => {
         admin.resetOTP = otp;
         admin.otpExpires = Date.now() + 10 * 60 * 1000; // OTP expires in 10 minutes
 
-        await admin.save(); 
+        await admin.save();
 
         // Configure Nodemailer
         const transporter = nodemailer.createTransport({
@@ -315,4 +316,69 @@ export const changePassword = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
+
+export const login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and Password are required.",
+            });
+        }
+
+        // Check in Admin model first
+        let user = await adminModel.findOne({ email });
+        let role = "Admin";
+
+        // If not admin, check in Employee model
+        if (!user) {
+            user = await employeeModel.findOne({ Email: email }); // use "email" if schema updated
+            role = "Employee";
+        }
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Email not found. Please check your email address.",
+            });
+        }
+
+        const isPasswordCorrect = await bcrypt.compare(password, user.password);
+        if (!isPasswordCorrect) {
+            return res.status(401).json({
+                success: false,
+                message: "Incorrect password. Please try again.",
+            });
+        }
+
+        const token = jwt.sign(
+            { _id: user._id, role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful.",
+            token,
+            role,
+            user: {
+                _id: user._id,
+                email: user.email || user.Email, // support both until schema is fixed
+                name: user.fullName || user.Name,
+            },
+        });
+
+    } catch (error) {
+        console.error("Login Error:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong. Please try again later.",
+            error: error.message,
+        });
+    }
+};
+
 
