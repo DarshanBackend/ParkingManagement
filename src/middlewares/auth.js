@@ -1,21 +1,34 @@
 import jwt from "jsonwebtoken"
-import {sendForbiddenResponse, sendErrorResponse ,sendUnauthorizedResponse,} from "../utils/ResponseUtils.js"
+import { sendForbiddenResponse, sendErrorResponse, sendUnauthorizedResponse, } from "../utils/ResponseUtils.js"
 
 export const verifyToken = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
     if (!token) {
-        return res.status(401).json({ error: 'Access denied. No token provided.' });
+        return res.status(401).json({
+            success: false,
+            error: 'Access denied. No token provided.'
+        });
     }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+        if (!decoded._id || !decoded.role) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid token structure.'
+            });
+        }
+
         req.user = decoded;
         next();
     } catch (err) {
         console.error('Token verification error:', err);
-        res.status(401).json({ error: 'Invalid token.' });
+        res.status(401).json({
+            success: false,
+            error: 'Invalid token.'
+        });
     }
 };
 
