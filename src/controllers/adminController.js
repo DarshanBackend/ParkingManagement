@@ -179,6 +179,15 @@ export const login = async (req, res) => {
         if (!user) {
             user = await employeeModel.findOne({ Email: email }); // use "email" if schema updated
             role = "Employee";
+            
+            // If employee found, update status to "On Duty"
+            if (user) {
+                await employeeModel.findByIdAndUpdate(
+                    user._id,
+                    { status: "On Duty" },
+                    { new: true }
+                );
+            }
         }
 
         if (!user) {

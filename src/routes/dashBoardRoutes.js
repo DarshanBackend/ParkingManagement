@@ -1,5 +1,5 @@
 import express from "express"
-import { getBookingSummary, getCurrentRevenue, getHourlyRevenueToday, getLevelSlotSummaryById, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getTotalVehicleFixed, getTransactionsByDate, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
+import { employeeStatusChangeApi, getBookingSummary, getCurrentRevenue, getHourlyRevenueToday, getLevelSlotSummaryById, getMonthlyRevenueAnalytics, getParkingOverview, getParkingTypeSummary, getParkingVolumeOverview, getRecentTransactions, getTotalRevenue, getTotalVehicleFixed, getTransactionsByDate, getWeeklyRevenueAnalytics, getYearlyRevenueAnalytics } from "../controllers/dashBoardController.js"
 
 const dashBoardRoutes = express.Router()
 
@@ -14,6 +14,7 @@ dashBoardRoutes.get("/getYearlyRevenueAnalytics", getYearlyRevenueAnalytics)
 dashBoardRoutes.get("/getBookingSummary", getBookingSummary)
 dashBoardRoutes.get("/getParkingTypeSummary", getParkingTypeSummary)
 dashBoardRoutes.get("/getCurrentRevenue", getCurrentRevenue)
+dashBoardRoutes.put("/employeeStatusChangeApi/:empId", employeeStatusChangeApi)
 
 //revenue data
 dashBoardRoutes.get("/getTotalRevenue", getTotalRevenue)

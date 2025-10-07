@@ -1,6 +1,7 @@
 import { ThrowError } from "../utils/Errorutils.js";
 import parkingDetailModel from "../models/parkingDetailsModel.js";
 import vehicleModel from "../models/vehicleModel.js";
+import employeeModel from "../models/employeeModel.js";
 import moment from "moment";
 import levelModel from "../models/levelModel.js";
 
@@ -620,5 +621,45 @@ export const getTransactionsByDate = async (req, res) => {
     } catch (error) {
         console.error("getTransactionsByDate error:", error);
         return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const employeeStatusChangeApi = async (req, res) => {
+    try {
+        const { empId } = req.params;
+
+        if (!empId) {
+            return res.status(400).json({
+                success: false,
+                message: "Employee ID is required in params.",
+            });
+        }
+
+        const updatedEmployee = await employeeModel.findByIdAndUpdate(
+            empId,
+            { status: "Off Duty", updatedAt: Date.now() },
+            { new: true }
+        );
+
+        if (!updatedEmployee) {
+            return res.status(404).json({
+                success: false,
+                message: "Employee not found.",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Employee status changed to Off Duty successfully.",
+            result: updatedEmployee,
+        });
+
+    } catch (error) {
+        console.error("employeeStatusChangeApi error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error.",
+            error: error.message,
+        });
     }
 };
