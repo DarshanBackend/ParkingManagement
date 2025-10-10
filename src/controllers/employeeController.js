@@ -155,7 +155,14 @@ export const editEmployee = async (req, res) => {
       fs.unlinkSync(employee.emp_image);
     }
 
-    // Update fields
+    if (shift) {
+      const shiftDoc = await shiftModel.findById(shift);
+      if (shiftDoc) {
+        employee.shift_Time = `${shiftDoc.startTime} to ${shiftDoc.endTime}`;
+      }
+      employee.shift = shift;
+    }
+
     employee.Name = Name ?? employee.Name;
     employee.Email = Email ?? employee.Email;
     employee.aadharcardNo = aadharcardNo ?? employee.aadharcardNo;
@@ -164,7 +171,6 @@ export const editEmployee = async (req, res) => {
     employee.status = status ?? employee.status;
     employee.gender = gender ?? employee.gender;
     employee.mobileNo = mobileNo ?? employee.mobileNo;
-    employee.shift = shift ?? employee.shift;
     if (newImagePath) employee.emp_image = newImagePath;
 
     if (password) {
@@ -174,9 +180,11 @@ export const editEmployee = async (req, res) => {
 
     await employee.save();
 
+    const updatedEmployee = await employeeModel.findById(id).populate('shift');
+
     return res.status(200).json({
       message: "Employee updated successfully",
-      data: employee
+      data: updatedEmployee
     });
 
   } catch (error) {
